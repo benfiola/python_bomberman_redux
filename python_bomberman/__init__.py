@@ -1,0 +1,1 @@
+from python_bomberman.server.app import App
