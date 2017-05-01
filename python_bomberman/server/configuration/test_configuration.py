@@ -3,7 +3,7 @@ import python_bomberman.server.configuration as configuration
 import pytest
 
 
-class TestSuite():
+class TestSuite:
     @pytest.fixture
     def server_config(self, temp_file):
         return configuration.ServerConfiguration(

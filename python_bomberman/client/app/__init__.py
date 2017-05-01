@@ -6,6 +6,7 @@ import pyglet.app
 current_app = None
 current_window = None
 
+
 class App(object):
     def __init__(self, config_file):
         global current_app, current_window
