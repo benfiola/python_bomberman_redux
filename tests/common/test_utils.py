@@ -11,7 +11,7 @@ class TestSuite:
         assert len(coordinate) == 2
 
     def test_x(self, coordinate):
-        assert coordinate.x() == 3
+        assert coordinate.x == 3
 
     def test_y(self, coordinate):
-        assert coordinate.y() == 5
+        assert coordinate.y == 5

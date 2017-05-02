@@ -5,6 +5,6 @@ import python_bomberman.common.utils as utils
 import pytest
 
 class TestSuite:
-    def test_init(self, game):
+    def test_init(self):
         pass
 

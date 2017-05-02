@@ -1,7 +1,5 @@
-import python_bomberman as module_under_test
 import pytest
-import os
-import shutil
+
 
 class TmpDirCleanup(object):
     """
@@ -25,5 +23,4 @@ class TmpDirCleanup(object):
             # isn't some huge directory that shouldn't be deleted).
 
 
-module_dir = os.path.dirname(module_under_test.__file__)
-pytest.main([module_dir], plugins=[TmpDirCleanup()])
+pytest.main(['tests'], plugins=[TmpDirCleanup()])

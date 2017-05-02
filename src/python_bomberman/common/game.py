@@ -51,6 +51,6 @@ class DestructibleWall(Entity):
     def __init__(self, location, identifier=uuid4()):
         super().__init__(location, identifier)
 
-class IndestructibleWall(Entity)
+class IndestructibleWall(Entity):
     def __init__(self, location, identifier=uuid4()):
         super().__init__(location, identifier)
