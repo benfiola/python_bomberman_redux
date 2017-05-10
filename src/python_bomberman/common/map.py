@@ -1,13 +1,18 @@
 from python_bomberman.common.logging import logger
+from python_bomberman.common.utils import Coordinate
 import json
 
 @logger.create()
 class Map(object):
-    def __init__(self, width, height, name=None):
+    def __init__(self, width, height, name=None, objects=None):
         self.name = name
         self.width = width
         self.height = height
         self._objects = [[None for _ in range(0, height)] for _ in range(0, width)]
+
+        if objects:
+            for obj in objects:
+                self.add_object(obj)
 
     def objects(self):
         return [map_obj for row in self._objects for map_obj in row if map_obj is not None]
@@ -39,28 +44,53 @@ class Map(object):
 
     @classmethod
     def load(cls, filename):
-        map_obj_classes = {map_cls.identifier: map_cls for map_cls in MapObject.__subclasses__()}
+        # find all map object definitions
+        obj_classes = {map_cls.identifier: map_cls for map_cls in MapObject.__subclasses__()}
+
+        # read the json data from a map file
         with open(filename, 'r') as f:
             data = json.loads(f.read())
-        to_return = cls(
-            width=data["metadata"]["width"],
-            height=data["metadata"]["height"],
-            name=data["metadata"]["name"]
+
+        # create our map objects
+        # this requires us to do a lookup on the MapObject subclasses we know of, finding the class
+        # this data object pertains to and invoking its constructor on the data we have.
+        objs = [
+            obj_classes[obj["identifier"]](
+                location=Coordinate(*obj["location"])
+            ) for obj in data["objects"] if obj["identifier"] in obj_classes
+        ]
+
+        return cls(
+            **data["metadata"],
+            objects=objs
         )
-        for map_obj_data in data["objects"]:
-            if map_obj_data["identifier"] in map_obj_classes:
-                map_obj_class = map_obj_classes[map_obj_data["identifier"]]
-                to_return.add_object(
-                    map_obj_class(
-                        location=map_obj_data["location"]
-                    )
-                )
-        return to_return
+
+    def __eq__(self, other):
+        try:
+            return (
+                self.name == other.name and
+                self.height == other.height and
+                self.width == other.width and
+                self.objects() == other.objects()
+            )
+        except AttributeError:
+            return False
 
 
 class MapObject(object):
+    identifier = "undefined"
+
     def __init__(self, location):
         self.location = location
+
+    def __eq__(self, other):
+        try:
+            return (
+                self.identifier == other.identifier and
+                self.location == other.location
+            )
+        except AttributeError:
+            return False
 
 
 class Player(MapObject):
