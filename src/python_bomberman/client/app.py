@@ -1,5 +1,6 @@
 from python_bomberman.client.configuration import ClientConfiguration
 from python_bomberman.client.graphics.window import GameWindow
+from python_bomberman.common.logging import logger
 import pyglet.app
 
 # Eh, flask does this for some clever stuff - why can't we?
@@ -7,6 +8,7 @@ current_app = None
 current_window = None
 
 
+@logger.create()
 class App(object):
     def __init__(self, config_file):
         global current_app, current_window

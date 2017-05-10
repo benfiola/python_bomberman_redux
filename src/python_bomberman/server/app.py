@@ -1,8 +1,10 @@
 from python_bomberman.server.configuration import ServerConfiguration
+from python_bomberman.common.logging import logger
 import pyglet.app
 current_app = None
 
 
+@logger.create()
 class App(object):
     def __init__(self, config_file):
         global current_app
