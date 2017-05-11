@@ -69,7 +69,7 @@ class TestSuite:
     def test_add_entity(self, empty_game, new_entity):
         num_entities_before_add = len(empty_game.get_entities())
         uid = new_entity.unique_id
-        loc = new_entity.location
+        loc = new_entity.logical_location
 
         empty_game.add_entity(new_entity)
         assert len(empty_game.get_entities()) == num_entities_before_add + 1
@@ -81,7 +81,7 @@ class TestSuite:
 
         num_entities_before_remove = len(empty_game.get_entities())
         uid = new_entity.unique_id
-        loc = new_entity.location
+        loc = new_entity.logical_location
 
         empty_game.remove_entity(new_entity)
         assert len(empty_game.get_entities()) == num_entities_before_remove - 1

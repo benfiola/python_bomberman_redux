@@ -45,7 +45,7 @@ class Map(object):
     @classmethod
     def load(cls, filename):
         # find all map object definitions
-        obj_classes = {map_cls.identifier: map_cls for map_cls in MapObject.__subclasses__()}
+        obj_classes = {map_cls.identifier: map_cls for map_cls in MapObject.__subclasses__() if hasattr(map_cls, "identifier")}
 
         # read the json data from a map file
         with open(filename, 'r') as f:
@@ -78,8 +78,6 @@ class Map(object):
 
 
 class MapObject(object):
-    identifier = "undefined"
-
     def __init__(self, location):
         self.location = location
 
