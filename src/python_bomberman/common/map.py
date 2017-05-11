@@ -14,7 +14,7 @@ class Map(object):
             for obj in objects:
                 self.add_object(obj)
 
-    def objects(self):
+    def get_objects(self):
         return [map_obj for row in self._objects for map_obj in row if map_obj is not None]
 
     def get_object(self, location):
@@ -37,7 +37,7 @@ class Map(object):
                 {
                     "identifier": obj.identifier,
                     "location": obj.location
-                } for obj in self.objects()]
+                } for obj in self.get_objects()]
         }
         with open(filename, 'w') as f:
             f.write(json.dumps(to_write))
@@ -71,7 +71,7 @@ class Map(object):
                 self.name == other.name and
                 self.height == other.height and
                 self.width == other.width and
-                self.objects() == other.objects()
+                self.get_objects() == other.get_objects()
             )
         except AttributeError:
             return False
