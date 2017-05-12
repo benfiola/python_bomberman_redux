@@ -12,10 +12,10 @@ class TestSuite:
 
     @pytest.fixture
     def populated_map(self, empty_map):
-        empty_map.add_object(map.Player(utils.Coordinate(0, 0)))
-        empty_map.add_object(map.Player(utils.Coordinate(3, 4)))
-        empty_map.add_object(map.DestructibleWall(utils.Coordinate(1, 1)))
-        empty_map.add_object(map.IndestructibleWall(utils.Coordinate(2, 2)))
+        empty_map.add(map.Player(utils.Coordinate(0, 0)))
+        empty_map.add(map.Player(utils.Coordinate(3, 4)))
+        empty_map.add(map.DestructibleWall(utils.Coordinate(1, 1)))
+        empty_map.add(map.IndestructibleWall(utils.Coordinate(2, 2)))
         return empty_map
 
     @pytest.fixture
@@ -52,7 +52,7 @@ class TestSuite:
                 self.name = populated_map.name
                 self.width = populated_map.width
                 self.height = populated_map.height
-                self._objects = populated_map.get_objects()
+                self._objects = populated_map.all_objects()
 
             def objects(self):
                 self._objects[0] = BogusObj(self._objects[0].location)
@@ -74,16 +74,16 @@ class TestSuite:
         assert empty_map.height == 5
 
     def test_add_get_object(self, empty_map, player):
-        assert len(empty_map.get_objects()) == 0
-        empty_map.add_object(player)
-        assert empty_map.get_object(player.location) == player
-        assert len(empty_map.get_objects()) == 1
+        assert len(empty_map.all_objects()) == 0
+        empty_map.add(player)
+        assert empty_map.object_at_location(player.location) == player
+        assert len(empty_map.all_objects()) == 1
 
     def test_remove_object(self, empty_map, player):
         self.test_add_get_object(empty_map, player)
-        empty_map.remove_object(player)
-        assert empty_map.get_object(player.location) is None
-        assert len(empty_map.get_objects()) == 0
+        empty_map.remove(player)
+        assert empty_map.object_at_location(player.location) is None
+        assert len(empty_map.all_objects()) == 0
 
     def test_save_map(self, populated_map, temp_file):
         assert not os.path.exists(temp_file)

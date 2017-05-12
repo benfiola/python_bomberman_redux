@@ -12,18 +12,18 @@ class Map(object):
 
         if objects:
             for obj in objects:
-                self.add_object(obj)
+                self.add(obj)
 
-    def get_objects(self):
+    def all_objects(self):
         return [map_obj for row in self._objects for map_obj in row if map_obj is not None]
 
-    def get_object(self, location):
+    def object_at_location(self, location):
         return self._objects[location.x][location.y]
 
-    def add_object(self, to_add):
+    def add(self, to_add):
         self._objects[to_add.location.x][to_add.location.y] = to_add
 
-    def remove_object(self, to_remove):
+    def remove(self, to_remove):
         self._objects[to_remove.location.x][to_remove.location.y] = None
 
     def save(self, filename):
@@ -37,7 +37,7 @@ class Map(object):
                 {
                     "identifier": obj.identifier,
                     "location": obj.location
-                } for obj in self.get_objects()]
+                } for obj in self.all_objects()]
         }
         with open(filename, 'w') as f:
             f.write(json.dumps(to_write))
@@ -71,7 +71,7 @@ class Map(object):
                 self.name == other.name and
                 self.height == other.height and
                 self.width == other.width and
-                self.get_objects() == other.get_objects()
+                self.all_objects() == other.all_objects()
             )
         except AttributeError:
             return False
