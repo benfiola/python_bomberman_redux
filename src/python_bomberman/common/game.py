@@ -124,7 +124,7 @@ class Entity(object):
         self.unique_id = unique_id
 
         # state related attributes
-        # TODO: Figure out how to do this such that we don't have infinity attributes in our base class.
+        # TODO: Figure out how to do this such that we don't have infinity attributes in our base class.  Is this the right way?
         self.moving = False
         self.movement_speed = None
         self.movement_last_update = None
