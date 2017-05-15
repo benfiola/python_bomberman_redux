@@ -28,7 +28,8 @@ class Game(object):
         return self._entities.values()
 
     def entities_at_location(self, location):
-        return self._board[location.x][location.y]
+        # TODO: Remove conversion to list after development done - annoying workaround to pycharm unresolved attr errors when iterating over a set.
+        return list(self._board[location.x][location.y])
 
     def entity_by_id(self, unique_id):
         if unique_id in self._entities:
@@ -54,11 +55,10 @@ class Game(object):
         self._remove_from_entity_map(entity)
 
     def drop_bomb(self, entity):
-        if not entity.moving and entity.bombs:
-            entity.bombs -= 1
-            new_bomb = Bomb(entity.logical_location, entity.bomb_duration, entity.fire_distance)
+        if not entity.is_moving and entity.bombs:
+            new_bomb = entity.drop_bomb()
             self.add(new_bomb)
-            new_bomb.set_to_explode()
+            new_bomb.set_to_detonate()
 
     def move(self, entity, location):
         """
@@ -77,19 +77,24 @@ class Game(object):
         Processes the gameboard and updates entities currently undergoing time-based modification.
         :return: None
         """
-        for entity in self.get_entities():
-            if entity.moving:
-                entity.move()
-                if not entity.moving:
+        for entity in self.all_entities():
+            if entity.can_move and entity.is_moving:
+                entity.update_move()
+                if not entity.is_moving:
                     for other_entity in self.entities_at_location(entity.logical_location):
-                        if other_entity.modifier:
+                        if other_entity.can_modify:
+                            # TODO: for robustness, maybe add modifier logic to entity creation events as well.
                             other_entity.modify(entity)
-                            self.remove(other_entity)
-            if entity.armed:
-                entity.explodable_count_down()
-                if entity.explodable_detonated:
-                    # TODO: Handle detonation
-                    pass
+                            other_entity.is_destroyed = True
+            if entity.can_detonate and entity.is_detonating:
+                entity.update_detonation()
+                if entity.is_detonated:
+                    entity.is_destroyed = True
+                    entity.owner.bombs += 1
+            # update last update time
+            entity.last_update = time.time()
+        for entity in [entity for entity in self.all_entities() if entity.can_destroy and entity.is_destroyed]:
+            self.remove(entity)
 
     def _remove_from_board(self, entity):
         self._board[entity.logical_location.x][entity.logical_location.y].remove(entity)
@@ -110,11 +115,12 @@ class Game(object):
         :return: bool indicating whether spot is occupied
         """
         for entity in self.entities_at_location(location):
-            if entity and entity.solid:
+            if entity and entity.can_collide:
                 return True
         return False
 
 
+@logger.create()
 class Entity(object):
     def __init__(self, location, unique_id):
         if unique_id is None:
@@ -123,19 +129,25 @@ class Entity(object):
         self.physical_location = location
         self.unique_id = unique_id
 
-        # state related attributes
-        # TODO: Figure out how to do this such that we don't have infinity attributes in our base class.  Is this the right way?
-        self.moving = False
+        # random data some entities might have
         self.movement_speed = None
-        self.movement_last_update = None
-        self.armed = False
-        self.explodable_detonated = False
-        self.explodable_last_update = None
-        self.explodable_countdown = None
+        self.bombs = 0
+        self.bomb_duration = 0
+        self.fire_distance = 0
+        self.last_update = time.time()
+        self.owner = None
 
-        # properties
-        self.solid = True
-        self.modifier = False
+        # definitions of actions entities can perform
+        # and the state tied to them.
+        self.can_modify = False
+        self.can_collide = False
+        self.can_move = False
+        self.is_moving = False
+        self.can_detonate = False
+        self.is_detonating = False
+        self.is_detonated = False
+        self.can_destroy = False
+        self.is_destroyed = False
 
     def set_to_move(self, location):
         """
@@ -143,21 +155,23 @@ class Entity(object):
         :param location: Coordinate to move to
         :return: None
         """
-        self.moving = True
-        self.movement_last_update = time.time()
+        self.is_moving = True
         self.logical_location = location
 
-    def set_to_explode(self):
-        self.armed = True
-        self.explodable_last_update = time.time()
+    def set_to_detonate(self):
+        self.is_detonating = True
 
-    def explodable_count_down(self):
+    def drop_bomb(self):
+        dropped_bomb = Bomb(self)
+        self.bombs -= 1
+        return dropped_bomb
+
+    def update_detonation(self):
         curr_time = time.time()
-        duration = curr_time - self.explodable_last_update
-        self.explodable_countdown -= duration
-        self.explodable_last_update = curr_time
-        if self.explodable_countdown <= 0:
-            self.explodable_detonated = True
+        duration = curr_time - self.last_update
+        self.bomb_duration -= duration
+        if self.bomb_duration <= 0:
+            self.is_detonated = True
 
     def _new_movement_location(self, duration):
         """
@@ -172,34 +186,34 @@ class Entity(object):
             # If our current location and target location are the same, we're not moving
             # in that direction, so set this component's value to 0.
             if l_loc == p_loc:
-                list_vec[index] = 0
+                distance = 0
             else:
                 # Otherwise, we take the product of self.movement_speed and duration,
                 # negating it if we're intending to move in the other direction.
-                list_vec[index] = (self.movement_speed * duration)
+                distance = (self.movement_speed * duration)
                 if l_loc - p_loc < 0:
-                    list_vec[index] = -list_vec[index]
+                    distance = -list_vec[index]
             # At this point we have a movement vector reflecting the number of units
             # we want to move in a given direction for each component, so we just
             # add this number to our physical location to get our next location.
-            list_vec[index] = p_loc + list_vec[index]
+            new_coordinate = p_loc + distance
+            list_vec.append(new_coordinate)
         return Coordinate(*list_vec)
 
-    def move(self):
+    def update_move(self):
         """
         Moves an entity towards its logical location.
         :return: None
         """
-        done_moving = False
+        done_moving = True
         curr_time = time.time()
 
         # if this entity has no movement_speed, it's teleporting.
         # otherwise, apply movement over time to the entity.
         if not self.movement_speed:
             new_location = self.logical_location
-            done_moving = True
         else:
-            new_location = self._new_movement_location(curr_time - self.movement_last_update)
+            new_location = self._new_movement_location(curr_time - self.last_update)
 
             # This block will evaluate if our new_location has reached or surpassed our target.
             # For both components, if we've reached or surpassed our target, then we're done moving.
@@ -211,16 +225,14 @@ class Entity(object):
                     n_distance <= 0 <= p_distance
                 )
 
-        # Naively update our last_update time and our physical location.
+        # Naively update our physical location.
         self.physical_location = new_location
-        self.movement_last_update = curr_time
 
         # If we're done moving, ensure our physical location matches our
         # logical location, reset movement state flags, and apply modifiers
         # that might be at the spot we've just arrived at.
         if done_moving:
-            self.moving = False
-            self.movement_last_update = None
+            self.is_moving = False
             self.physical_location = self.logical_location
 
 
@@ -229,6 +241,9 @@ class Player(Entity):
 
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.can_move = True
+        self.can_destroy = True
+        self.can_collide = True
         self.bombs = 1
         self.movement_speed = 1
         self.fire_distance = 3
@@ -238,10 +253,13 @@ class Player(Entity):
 class Bomb(Entity):
     identifier = "bomb"
 
-    def __init__(self, location, countdown, fire_distance, unique_id=None):
-        super().__init__(location, unique_id)
-        self.explodable_countdown = countdown
-        self.fire_distance = fire_distance
+    def __init__(self, owner, unique_id=None):
+        super().__init__(owner.logical_location, unique_id)
+        self.can_detonate = True
+        self.can_collide = True
+        self.bomb_duration = owner.bomb_duration
+        self.fire_distance = owner.fire_distance
+        self.owner = owner
 
 
 class DestructibleWall(Entity):
@@ -249,6 +267,8 @@ class DestructibleWall(Entity):
 
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.can_destroy = True
+        self.can_collide = True
 
 
 class IndestructibleWall(Entity):
@@ -256,12 +276,14 @@ class IndestructibleWall(Entity):
 
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.can_collide = True
 
 
 class Modifier(Entity):
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
-        self.solid = False
+        self.can_modify = True
+        self.can_destroy = True
 
     def modify(self, entity):
         pass
@@ -270,25 +292,28 @@ class Modifier(Entity):
 class MovementModifier(Modifier):
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.amount = .1
 
     def modify(self, entity):
-        entity.movement_speed += .1
+        entity.movement_speed += self.amount
 
 
 class BombModifier(Modifier):
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.amount = 1
 
     def modify(self, entity):
-        entity.bombs += 1
+        entity.bombs += self.amount
 
 
 class FireModifier(Modifier):
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.amount = 1
 
     def modify(self, entity):
-        entity.fire_distance += 1
+        entity.fire_distance += self.amount
 
 
 class GameConfiguration(object):
