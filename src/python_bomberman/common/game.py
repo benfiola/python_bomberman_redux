@@ -56,7 +56,7 @@ class Game(object):
 
     def drop_bomb(self, entity):
         if not entity.is_moving and entity.bombs:
-            new_bomb = entity.drop_bomb()
+            new_bomb = entity.give_bomb()
             self.add(new_bomb)
             new_bomb.set_to_detonate()
 
@@ -161,7 +161,7 @@ class Entity(object):
     def set_to_detonate(self):
         self.is_detonating = True
 
-    def drop_bomb(self):
+    def give_bomb(self):
         dropped_bomb = Bomb(self)
         self.bombs -= 1
         return dropped_bomb

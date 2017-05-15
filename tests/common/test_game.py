@@ -118,11 +118,11 @@ class TestSuite:
                 bomb = entity
         assert bomb is not None
 
-        time.sleep(bomb_duration/2)
+        time.sleep(sleep_time)
         empty_game.process()
         assert 0 < bomb.bomb_duration <= bomb_duration
 
-        time.sleep(bomb_duration/2)
+        time.sleep(sleep_time)
         empty_game.process()
         assert bomb.is_detonated is True
         assert bomb.is_destroyed is True
