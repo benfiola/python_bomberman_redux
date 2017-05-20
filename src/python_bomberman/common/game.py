@@ -15,22 +15,6 @@ class Game(object):
         for entity in self._convert_map_objects(game_map.all_objects()):
             self.add(entity)
 
-    @staticmethod
-    def _convert_map_objects(map_objs):
-        entity_classes = {cls.identifier: cls for cls in Entity.__subclasses__() if hasattr(cls, "identifier")}
-        return [
-            entity_classes[map_obj.identifier](
-                location=map_obj.location
-            ) for map_obj in map_objs if map_obj.identifier in entity_classes
-        ]
-
-    def all_entities(self):
-        return self._entities.values()
-
-    def entities_at_location(self, location):
-        # TODO: Remove conversion to list after development done - annoying workaround to pycharm unresolved attr errors when iterating over a set.
-        return list(self._board[location.x][location.y])
-
     def entity_by_id(self, unique_id):
         if unique_id in self._entities:
             return self._entities[unique_id]
@@ -77,11 +61,11 @@ class Game(object):
         Processes the gameboard and updates entities currently undergoing time-based modification.
         :return: None
         """
-        for entity in self.all_entities():
+        for entity in self._all_entities():
             if entity.can_move and entity.is_moving:
                 entity.update_move()
                 if not entity.is_moving:
-                    for other_entity in self.entities_at_location(entity.logical_location):
+                    for other_entity in self._entities_at_location(entity.logical_location):
                         if other_entity.can_modify:
                             # TODO: for robustness, maybe add modifier logic to entity creation events as well.
                             other_entity.modify(entity)
@@ -89,26 +73,21 @@ class Game(object):
             if entity.can_detonate and entity.is_detonating:
                 entity.update_detonation()
                 if entity.is_detonated:
+                    # flag our bomb as destroyed, give a bomb back to the owner
+                    entity.is_destroyed = True
+                    entity.owner.receive_bomb()
+
                     # go in all directions, destroying everything until we run out of locations or have to stop.
                     # TODO: check and ensure that locations are valid.
                     for coordinates_in_direction in entity.get_detonation_locations():
                         for coordinate in coordinates_in_direction:
-                            destruction_in_direction_finished = False
-                            for entity_to_destroy in self.entities_at_location(coordinate):
-                                if not entity_to_destroy.can_destroy:
-                                    destruction_in_direction_finished = True
-                                    break
-                                entity_to_destroy.is_destroyed = True
-                            if destruction_in_direction_finished:
+                            if self._has_indestructible(coordinate):
                                 break
-                            else:
-                                fire = Fire(coordinate)
-                                self.add(fire)
-                                fire.set_to_burn()
-
-                    # now we destroy our bomb and give the owner of the bomb their bomb back.
-                    entity.is_destroyed = True
-                    entity.owner.receive_bomb()
+                            for entity_to_destroy in self._entities_at_location(coordinate):
+                                entity_to_destroy.is_destroyed = True
+                            fire = Fire(coordinate)
+                            self.add(fire)
+                            fire.set_to_burn()
             if entity.can_burn and entity.is_burning:
                 entity.update_burn()
                 if not entity.is_burning:
@@ -118,8 +97,23 @@ class Game(object):
             entity.last_update = time.time()
 
         # now clean up anything that's been destroyed
-        for entity in [entity for entity in self.all_entities() if entity.can_destroy and entity.is_destroyed]:
+        for entity in [entity for entity in self._all_entities() if entity.can_destroy and entity.is_destroyed]:
             self.remove(entity)
+
+    @staticmethod
+    def _convert_map_objects(map_objs):
+        entity_classes = {cls.identifier: cls for cls in Entity.__subclasses__() if hasattr(cls, "identifier")}
+        return [
+            entity_classes[map_obj.identifier](
+                location=map_obj.location
+            ) for map_obj in map_objs if map_obj.identifier in entity_classes
+        ]
+
+    def _all_entities(self):
+        return list(self._entities.values())
+
+    def _entities_at_location(self, location):
+        return list(self._board[location.x][location.y])
 
     def _remove_from_board(self, entity):
         self._board[entity.logical_location.x][entity.logical_location.y].remove(entity)
@@ -133,14 +127,20 @@ class Game(object):
     def _add_to_entity_map(self, entity):
         self._entities[entity.unique_id] = entity
 
+    def _has_indestructible(self, location):
+        for entity in self._entities_at_location(location):
+            if not entity.can_destroy and not entity.is_destroyed:
+                return True
+        return False
+
     def _has_collision(self, location):
         """
         Checks to see if a given Coordinate is occupied by a solid entity.
         :param location: Location where collision check is performed
         :return: bool indicating whether spot is occupied
         """
-        for entity in self.entities_at_location(location):
-            if entity and entity.can_collide:
+        for entity in self._entities_at_location(location):
+            if entity.can_collide and not entity.is_destroyed:
                 return True
         return False
 
@@ -304,7 +304,9 @@ class Fire(Entity):
 
     def __init__(self, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.can_burn = True
         self.fire_duration = 2
+        self.can_destroy = True
 
 
 class Bomb(Entity):
@@ -312,6 +314,7 @@ class Bomb(Entity):
 
     def __init__(self, owner, location, unique_id=None):
         super().__init__(location, unique_id)
+        self.can_destroy = True
         self.can_detonate = True
         self.can_collide = True
         self.bomb_duration = owner.bomb_duration

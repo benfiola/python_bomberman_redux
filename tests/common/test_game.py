@@ -47,11 +47,11 @@ class TestSuite:
     def matching_num_entities(game_under_test):
         # validates the game board and the entity map for parity
         board_entities = [entity for row in game_under_test._board for entities in row for entity in entities]
-        assert len(game_under_test.all_entities()) == len(board_entities)
+        assert len(game_under_test._all_entities()) == len(board_entities)
 
     def _test_init(self, game_arg, map_arg, configuration):
         # make sure the number of entities match the number of map objects
-        assert len(game_arg.all_entities()) == len(map_arg.all_objects())
+        assert len(game_arg._all_entities()) == len(map_arg.all_objects())
         self.matching_num_entities(game_arg)
 
         # does the board match the map in terms of dimensions
@@ -81,25 +81,25 @@ class TestSuite:
         self._test_init(filled_game, filled_map, game_configuration)
 
     def test_add_entity(self, empty_game, player_entity):
-        num_entities_before_add = len(empty_game.all_entities())
+        num_entities_before_add = len(empty_game._all_entities())
         uid = player_entity.unique_id
         loc = player_entity.logical_location
 
         empty_game.add(player_entity)
-        assert len(empty_game.all_entities()) == num_entities_before_add + 1
-        assert player_entity in empty_game.entities_at_location(location=loc)
+        assert len(empty_game._all_entities()) == num_entities_before_add + 1
+        assert player_entity in empty_game._entities_at_location(location=loc)
         assert empty_game.entity_by_id(unique_id=uid) == player_entity
 
     def test_remove_entity(self, empty_game, player_entity):
         empty_game.add(player_entity)
 
-        num_entities_before_remove = len(empty_game.all_entities())
+        num_entities_before_remove = len(empty_game._all_entities())
         uid = player_entity.unique_id
         loc = player_entity.logical_location
 
         empty_game.remove(player_entity)
-        assert len(empty_game.all_entities()) == num_entities_before_remove - 1
-        assert player_entity not in empty_game.entities_at_location(location=loc)
+        assert len(empty_game._all_entities()) == num_entities_before_remove - 1
+        assert player_entity not in empty_game._entities_at_location(location=loc)
         assert empty_game.entity_by_id(unique_id=uid) is None
 
     def test_bomb_detonate(self, empty_game, player_entity):
@@ -113,7 +113,7 @@ class TestSuite:
         assert (orig_bomb_count - 1) == player_entity.bombs
 
         bomb = None
-        for entity in empty_game.all_entities():
+        for entity in empty_game._all_entities():
             if entity.can_detonate:
                 bomb = entity
         assert bomb is not None
@@ -126,6 +126,7 @@ class TestSuite:
         empty_game.process()
         assert bomb.is_detonated is True
         assert bomb.is_destroyed is True
+        assert player_entity.is_destroyed is True
 
     def test_bomb_modifier(self, empty_game, player_entity):
         bomb_modifier = game.BombModifier(
