@@ -89,10 +89,35 @@ class Game(object):
             if entity.can_detonate and entity.is_detonating:
                 entity.update_detonation()
                 if entity.is_detonated:
+                    # go in all directions, destroying everything until we run out of locations or have to stop.
+                    # TODO: check and ensure that locations are valid.
+                    for coordinates_in_direction in entity.get_detonation_locations():
+                        for coordinate in coordinates_in_direction:
+                            destruction_in_direction_finished = False
+                            for entity_to_destroy in self.entities_at_location(coordinate):
+                                if not entity_to_destroy.can_destroy:
+                                    destruction_in_direction_finished = True
+                                    break
+                                entity_to_destroy.is_destroyed = True
+                            if destruction_in_direction_finished:
+                                break
+                            else:
+                                fire = Fire(coordinate)
+                                self.add(fire)
+                                fire.set_to_burn()
+
+                    # now we destroy our bomb and give the owner of the bomb their bomb back.
                     entity.is_destroyed = True
-                    entity.owner.bombs += 1
+                    entity.owner.receive_bomb()
+            if entity.can_burn and entity.is_burning:
+                entity.update_burn()
+                if not entity.is_burning:
+                    entity.is_destroyed = True
+
             # update last update time
             entity.last_update = time.time()
+
+        # now clean up anything that's been destroyed
         for entity in [entity for entity in self.all_entities() if entity.can_destroy and entity.is_destroyed]:
             self.remove(entity)
 
@@ -134,6 +159,7 @@ class Entity(object):
         self.bombs = 0
         self.bomb_duration = 0
         self.fire_distance = 0
+        self.fire_duration = 0
         self.last_update = time.time()
         self.owner = None
 
@@ -148,6 +174,8 @@ class Entity(object):
         self.is_detonated = False
         self.can_destroy = False
         self.is_destroyed = False
+        self.can_burn = False
+        self.is_burning = False
 
     def set_to_move(self, location):
         """
@@ -161,10 +189,24 @@ class Entity(object):
     def set_to_detonate(self):
         self.is_detonating = True
 
+    def set_to_burn(self):
+        self.is_burning = True
+
+    def receive_bomb(self):
+        self.bombs += 1
+
     def give_bomb(self):
-        dropped_bomb = Bomb(self)
+        dropped_bomb = Bomb(self, self.logical_location)
         self.bombs -= 1
         return dropped_bomb
+
+    def get_detonation_locations(self):
+        return [
+            [Coordinate(x, self.logical_location.y) for x in range(self.logical_location.x, self.logical_location.x + self.fire_distance)],
+            [Coordinate(x, self.logical_location.y) for x in range(self.logical_location.x, self.logical_location.x - self.fire_distance, -1)],
+            [Coordinate(self.logical_location.x, y) for y in range(self.logical_location.y, self.logical_location.y + self.fire_distance)],
+            [Coordinate(self.logical_location.x, y) for y in range(self.logical_location.y, self.logical_location.y - self.fire_distance, -1)]
+        ]
 
     def update_detonation(self):
         curr_time = time.time()
@@ -172,6 +214,13 @@ class Entity(object):
         self.bomb_duration -= duration
         if self.bomb_duration <= 0:
             self.is_detonated = True
+
+    def update_burn(self):
+        curr_time = time.time()
+        duration = curr_time - self.last_update
+        self.fire_duration -= duration
+        if self.fire_duration <= 0:
+            self.is_burning = False
 
     def _new_movement_location(self, duration):
         """
@@ -250,11 +299,19 @@ class Player(Entity):
         self.bomb_duration = 3
 
 
+class Fire(Entity):
+    identifier = "fire"
+
+    def __init__(self, location, unique_id=None):
+        super().__init__(location, unique_id)
+        self.fire_duration = 2
+
+
 class Bomb(Entity):
     identifier = "bomb"
 
-    def __init__(self, owner, unique_id=None):
-        super().__init__(owner.logical_location, unique_id)
+    def __init__(self, owner, location, unique_id=None):
+        super().__init__(location, unique_id)
         self.can_detonate = True
         self.can_collide = True
         self.bomb_duration = owner.bomb_duration
