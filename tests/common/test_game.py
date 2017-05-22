@@ -1,9 +1,11 @@
-import python_bomberman.common.game as game
+import python_bomberman.common.game.game as game
+import python_bomberman.common.game.entities as entities
 import python_bomberman.common.map as map
 import python_bomberman.common.utils as utils
 
 import pytest
 import time
+
 
 class TestSuite:
     @pytest.fixture
@@ -20,46 +22,31 @@ class TestSuite:
         return empty_map
 
     @pytest.fixture
-    def game_configuration(self):
-        return game.GameConfiguration()
-
-    @pytest.fixture
     def player_entity(self):
-        return game.Player(
+        return entities.Player(
             utils.Coordinate(2, 2)
         )
 
     @pytest.fixture
-    def empty_game(self, game_configuration, empty_map):
+    def empty_game(self, empty_map):
         return game.Game(
-            configuration=game_configuration,
             game_map=empty_map
         )
 
     @pytest.fixture
-    def filled_game(self, game_configuration, filled_map):
+    def filled_game(self, filled_map):
         return game.Game(
-            configuration=game_configuration,
             game_map=filled_map
         )
 
-    @staticmethod
-    def matching_num_entities(game_under_test):
-        # validates the game board and the entity map for parity
-        board_entities = [entity for row in game_under_test._board for entities in row for entity in entities]
-        assert len(game_under_test._all_entities()) == len(board_entities)
-
-    def _test_init(self, game_arg, map_arg, configuration):
+    def _test_init(self, game_arg, map_arg):
         # make sure the number of entities match the number of map objects
         assert len(game_arg._all_entities()) == len(map_arg.all_objects())
-        self.matching_num_entities(game_arg)
+        assert len(game_arg._board._all_entities()) == len(game_arg._all_entities())
 
         # does the board match the map in terms of dimensions
-        assert len(game_arg._board) == map_arg.width
-        assert len(game_arg._board[0]) == map_arg.height
-
-        # make sure the configuration is correct
-        assert game_arg.configuration == configuration
+        assert len(game_arg._board._spaces) == map_arg.width
+        assert len(game_arg._board._spaces[0]) == map_arg.height
 
     def _test_modifier(self, curr_game, player, modifier, attribute):
         original_attribute = getattr(player, attribute)
@@ -74,11 +61,11 @@ class TestSuite:
         assert (original_attribute + modifier.amount) == modified_attribute
         assert modifier.is_destroyed is True
 
-    def test_init_empty(self, empty_game, empty_map, game_configuration):
-        self._test_init(empty_game, empty_map, game_configuration)
+    def test_init_empty(self, empty_game, empty_map):
+        self._test_init(empty_game, empty_map)
 
-    def test_init_filled(self, filled_game, filled_map, game_configuration):
-        self._test_init(filled_game, filled_map, game_configuration)
+    def test_init_filled(self, filled_game, filled_map):
+        self._test_init(filled_game, filled_map)
 
     def test_add_entity(self, empty_game, player_entity):
         num_entities_before_add = len(empty_game._all_entities())
@@ -87,7 +74,7 @@ class TestSuite:
 
         empty_game.add(player_entity)
         assert len(empty_game._all_entities()) == num_entities_before_add + 1
-        assert player_entity in empty_game._entities_at_location(location=loc)
+        assert player_entity == empty_game._board.get_space(player_entity.logical_location).entity
         assert empty_game.entity_by_id(unique_id=uid) == player_entity
 
     def test_remove_entity(self, empty_game, player_entity):
@@ -99,7 +86,7 @@ class TestSuite:
 
         empty_game.remove(player_entity)
         assert len(empty_game._all_entities()) == num_entities_before_remove - 1
-        assert player_entity not in empty_game._entities_at_location(location=loc)
+        assert empty_game._board.get_space(player_entity.logical_location).entity is None
         assert empty_game.entity_by_id(unique_id=uid) is None
 
     def test_bomb_detonate(self, empty_game, player_entity):
@@ -129,7 +116,7 @@ class TestSuite:
         assert player_entity.is_destroyed is True
 
     def test_bomb_modifier(self, empty_game, player_entity):
-        bomb_modifier = game.BombModifier(
+        bomb_modifier = entities.BombModifier(
             location=utils.Coordinate(
                 player_entity.logical_location[0]+1,
                 player_entity.logical_location[1]
@@ -138,7 +125,7 @@ class TestSuite:
         self._test_modifier(empty_game, player_entity, bomb_modifier, "bombs")
 
     def test_movement_modifier(self, empty_game, player_entity):
-        movement_modifier = game.MovementModifier(
+        movement_modifier = entities.MovementModifier(
             location=utils.Coordinate(
                 player_entity.logical_location[0]+1,
                 player_entity.logical_location[1]
@@ -147,7 +134,7 @@ class TestSuite:
         self._test_modifier(empty_game, player_entity, movement_modifier, "movement_speed")
 
     def test_fire_modifier(self, empty_game, player_entity):
-        fire_modifier = game.FireModifier(
+        fire_modifier = entities.FireModifier(
             location=utils.Coordinate(
                 player_entity.logical_location[0]+1,
                 player_entity.logical_location[1]
@@ -165,7 +152,7 @@ class TestSuite:
 
         # assert the initial move conditions are met
         empty_game.move(player_entity, move_location)
-        assert player_entity.can_move and player_entity.is_moving
+        assert player_entity.is_moving
         assert player_entity.logical_location == move_location
         assert player_entity.physical_location != move_location
 
