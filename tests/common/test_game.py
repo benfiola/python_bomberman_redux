@@ -99,10 +99,7 @@ class TestSuite:
 
         assert (orig_bomb_count - 1) == player_entity.bombs
 
-        bomb = None
-        for entity in empty_game._all_entities():
-            if entity.can_detonate:
-                bomb = entity
+        bomb = empty_game._board.get_space(player_entity.logical_location).bomb
         assert bomb is not None
 
         time.sleep(sleep_time)

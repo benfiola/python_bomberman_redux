@@ -1,5 +1,5 @@
 from python_bomberman.common.game.exceptions import GameException
-from python_bomberman.common.game.entities import Modifier, Fire
+from python_bomberman.common.game.entities import Modifier, Fire, Bomb, Collideable
 from python_bomberman.common.utils import Coordinate
 
 
@@ -8,11 +8,14 @@ class BoardSpace(object):
         self.location = location
         self.modifier = None
         self.entity = None
+        self.bomb = None
         self.fire = None
 
     @staticmethod
     def _space_attr(entity):
-        if isinstance(entity, Modifier):
+        if isinstance(entity, Bomb):
+            return "bomb"
+        elif isinstance(entity, Modifier):
             return "modifier"
         elif isinstance(entity, Fire):
             return "fire"
@@ -24,6 +27,9 @@ class BoardSpace(object):
             self.modifier.is_destroyed = True
         if self.entity:
             self.entity.is_destroyed = True
+
+    def has_collision(self):
+        return self.bomb or isinstance(self.entity, Collideable)
 
     def add(self, entity):
         attr = self._space_attr(entity)

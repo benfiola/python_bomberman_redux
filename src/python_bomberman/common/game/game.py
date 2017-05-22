@@ -56,7 +56,7 @@ class Game(object):
         :param location: desired Coordinate to move Entity to.
         :return: 
         """
-        if not isinstance(self._board.get_space(location).entity, entities.Collideable):
+        if not self._board.get_space(location).has_collision():
             self._board.remove(entity)
             entity.is_moving = True
             entity.logical_location = location
