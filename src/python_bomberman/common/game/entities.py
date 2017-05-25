@@ -14,6 +14,13 @@ class Entity(object):
         self.unique_id = unique_id
         self.last_update = time.time()
 
+        self.is_destroyed = False
+
+
+class Modifiable(Entity):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
 
 class Collideable(Entity):
     def __init__(self, **kwargs):
@@ -85,10 +92,11 @@ class Movable(Entity):
 
 
 class Detonatable(Entity):
-    def __init__(self, bomb_duration, **kwargs):
+    def __init__(self, bomb_duration, fire_distance, owner=None, **kwargs):
         super().__init__(**kwargs)
         self.is_detonating = False
-        self.is_detonated = False
+        self.fire_distance = fire_distance
+        self.owner = owner
         self.bomb_duration = bomb_duration
 
     def detonate_update(self):
@@ -96,7 +104,7 @@ class Detonatable(Entity):
         duration = curr_time - self.last_update
         self.bomb_duration -= duration
         if self.bomb_duration <= 0:
-            self.is_detonated = True
+            self.is_detonating = False
 
 
 class Burnable(Entity):
@@ -116,7 +124,6 @@ class Burnable(Entity):
 class Destroyable(Entity):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.is_destroyed = False
 
 
 class Player(Movable, Destroyable, Collideable):
@@ -152,13 +159,10 @@ class Bomb(Detonatable, Destroyable, Collideable):
         super().__init__(
             location=location,
             unique_id=unique_id,
+            owner=owner,
             fire_distance=owner.fire_distance,
             bomb_duration=owner.bomb_duration,
         )
-
-        self.bomb_duration = owner.bomb_duration
-        self.fire_distance = owner.fire_distance
-        self.owner = owner
 
 
 class DestructibleWall(Collideable, Destroyable):

@@ -2,170 +2,135 @@ import python_bomberman.common.game.game as game
 import python_bomberman.common.game.entities as entities
 import python_bomberman.common.map as map
 import python_bomberman.common.utils as utils
-
 import pytest
-import time
 
-
-class TestSuite:
+class TestGameSuite:
     @pytest.fixture
-    def empty_map(self):
-        new_map = map.Map(5, 5, name="test")
-        return new_map
+    def empty_game_map(self):
+        return map.Map(
+            height=5,
+            width=5
+        )
 
     @pytest.fixture
-    def filled_map(self, empty_map):
-        empty_map.add(map.Player(utils.Coordinate(0, 0)))
-        empty_map.add(map.Player(utils.Coordinate(3, 4)))
-        empty_map.add(map.DestructibleWall(utils.Coordinate(1, 1)))
-        empty_map.add(map.IndestructibleWall(utils.Coordinate(2, 2)))
-        return empty_map
+    def populated_map(self, empty_game_map):
+        empty_game_map.add(map.Player(utils.Coordinate(1, 1)))
+        return empty_game_map
 
     @pytest.fixture
     def player_entity(self):
         return entities.Player(
-            utils.Coordinate(2, 2)
+            utils.Coordinate(1, 1)
         )
 
     @pytest.fixture
-    def empty_game(self, empty_map):
-        return game.Game(
-            game_map=empty_map
-        )
+    def empty_game(self, empty_game_map):
+        new_game = game.Game(empty_game_map)
+        return new_game
 
-    @pytest.fixture
-    def filled_game(self, filled_map):
-        return game.Game(
-            game_map=filled_map
-        )
 
-    def _test_init(self, game_arg, map_arg):
-        # make sure the number of entities match the number of map objects
-        assert len(game_arg._all_entities()) == len(map_arg.all_objects())
-        assert len(game_arg._board._all_entities()) == len(game_arg._all_entities())
+    # for now, provided we test the attributes exclusively, the only thing
+    # we need to test here is whether or not the game will automatically add
+    # entities from the map to the game at init time.
+    def test_init(self, populated_map):
+        new_game = game.Game(populated_map)
+        entity = new_game._board.get(utils.Coordinate(1, 1))
+        assert entity is not None
+        assert len(new_game.all_entities()) == 1
 
-        # does the board match the map in terms of dimensions
-        assert len(game_arg._board._spaces) == map_arg.width
-        assert len(game_arg._board._spaces[0]) == map_arg.height
-
-    def _test_modifier(self, curr_game, player, modifier, attribute):
-        original_attribute = getattr(player, attribute)
-
-        curr_game.add(player)
-        curr_game.add(modifier)
-        curr_game.move(player, modifier.logical_location)
-        time.sleep(player.movement_speed)
-        curr_game.process()
-
-        modified_attribute = getattr(player, attribute)
-        assert (original_attribute + modifier.amount) == modified_attribute
-        assert modifier.is_destroyed is True
-
-    def test_init_empty(self, empty_game, empty_map):
-        self._test_init(empty_game, empty_map)
-
-    def test_init_filled(self, filled_game, filled_map):
-        self._test_init(filled_game, filled_map)
-
-    def test_add_entity(self, empty_game, player_entity):
-        num_entities_before_add = len(empty_game._all_entities())
-        uid = player_entity.unique_id
-        loc = player_entity.logical_location
+    def test_add(self, empty_game, player_entity):
+        assert len(empty_game.all_entities()) == 0
 
         empty_game.add(player_entity)
-        assert len(empty_game._all_entities()) == num_entities_before_add + 1
-        assert player_entity == empty_game._board.get_space(player_entity.logical_location).entity
-        assert empty_game.entity_by_id(unique_id=uid) == player_entity
 
-    def test_remove_entity(self, empty_game, player_entity):
-        empty_game.add(player_entity)
+        assert len(empty_game.all_entities()) == 1
+        assert empty_game._board.get(player_entity.logical_location).entity == player_entity
+        assert empty_game._entities.get(player_entity.unique_id) == player_entity
 
-        num_entities_before_remove = len(empty_game._all_entities())
-        uid = player_entity.unique_id
-        loc = player_entity.logical_location
-
+    def test_remove(self, empty_game, player_entity):
+        self.test_add(empty_game, player_entity)
         empty_game.remove(player_entity)
-        assert len(empty_game._all_entities()) == num_entities_before_remove - 1
-        assert empty_game._board.get_space(player_entity.logical_location).entity is None
-        assert empty_game.entity_by_id(unique_id=uid) is None
 
-    def test_bomb_detonate(self, empty_game, player_entity):
-        orig_bomb_count = player_entity.bombs
-        bomb_duration = player_entity.bomb_duration
-        sleep_time = bomb_duration / 2.0
+        assert len(empty_game.all_entities()) == 0
+        assert empty_game._board.get(player_entity.logical_location).entity is None
+        assert empty_game._entities.get(player_entity.unique_id) is None
 
+    def test_move(self, empty_game, player_entity):
+        self.test_add(empty_game, player_entity)
+
+        old_location = player_entity.logical_location
+        new_location = utils.Coordinate(old_location.x + 1, old_location.y)
+
+        assert player_entity.is_moving is False
+        assert player_entity.logical_location == old_location
+        assert empty_game._board.get(old_location).entity == player_entity
+
+        empty_game.move(player_entity, new_location)
+
+        assert player_entity.is_moving is True
+        assert player_entity.logical_location is new_location
+        assert empty_game._board.get(new_location).entity == player_entity
+
+    def test_drop_bomb(self, empty_game, player_entity):
         empty_game.add(player_entity)
+
+        space = empty_game._board.get(player_entity.logical_location)
+        assert space.bomb is None
+        assert player_entity.bombs == 1
+
         empty_game.drop_bomb(player_entity)
 
-        assert (orig_bomb_count - 1) == player_entity.bombs
-
-        bomb = empty_game._board.get_space(player_entity.logical_location).bomb
-        assert bomb is not None
-
-        time.sleep(sleep_time)
-        empty_game.process()
-        assert 0 < bomb.bomb_duration <= bomb_duration
-
-        time.sleep(sleep_time)
-        empty_game.process()
-        assert bomb.is_detonated is True
-        assert bomb.is_destroyed is True
-        assert player_entity.is_destroyed is True
-
-    def test_bomb_modifier(self, empty_game, player_entity):
-        bomb_modifier = entities.BombModifier(
-            location=utils.Coordinate(
-                player_entity.logical_location[0]+1,
-                player_entity.logical_location[1]
-            )
-        )
-        self._test_modifier(empty_game, player_entity, bomb_modifier, "bombs")
-
-    def test_movement_modifier(self, empty_game, player_entity):
-        movement_modifier = entities.MovementModifier(
-            location=utils.Coordinate(
-                player_entity.logical_location[0]+1,
-                player_entity.logical_location[1]
-            )
-        )
-        self._test_modifier(empty_game, player_entity, movement_modifier, "movement_speed")
-
-    def test_fire_modifier(self, empty_game, player_entity):
-        fire_modifier = entities.FireModifier(
-            location=utils.Coordinate(
-                player_entity.logical_location[0]+1,
-                player_entity.logical_location[1]
-            )
-        )
-        self._test_modifier(empty_game, player_entity, fire_modifier, "fire_distance")
-
-    def test_move_movable(self, empty_game, player_entity):
-        empty_game.add(player_entity)
-
-        original_location = player_entity.logical_location
-        move_location = utils.Coordinate(player_entity.logical_location[0]+1, player_entity.logical_location[1])
-
-        sleep_time = player_entity.movement_speed / 2.0
-
-        # assert the initial move conditions are met
-        empty_game.move(player_entity, move_location)
-        assert player_entity.is_moving
-        assert player_entity.logical_location == move_location
-        assert player_entity.physical_location != move_location
-
-        # sleep for half the move time
-        # and ensure that the player has moved in between the original and target locations
-        time.sleep(sleep_time)
-        empty_game.process()
-        for (o_loc, p_loc, l_loc) in zip(original_location, player_entity.physical_location, player_entity.logical_location):
-            if o_loc != l_loc:
-                assert o_loc < p_loc < l_loc or l_loc < p_loc < o_loc
-
-        # sleep for the remainder of the move time
-        # and ensure that the player has reached their destination
-        time.sleep(sleep_time)
-        empty_game.process()
-        assert player_entity.physical_location == player_entity.logical_location
-        assert player_entity.logical_location == move_location
+        assert player_entity.bombs == 0
+        assert space.bomb is not None
+        assert space.bomb.is_detonating is True
 
 
+class TestBoardSuite:
+    def test_init(self):
+        pass
+
+    def test_add(self):
+        pass
+
+    def test_remove(self):
+        pass
+
+    def test_blast_radius(self):
+        pass
+
+
+class TestEntityMapSuite:
+    def test_init(self):
+        pass
+
+    def test_add(self):
+        pass
+
+    def test_remove(self):
+        pass
+
+
+class TestBoardSpaceSuite:
+    def test_init(self):
+        pass
+
+    def test_has_collision(self):
+        pass
+
+    def test_add(self):
+        pass
+
+    def test_remove(self):
+        pass
+
+    def test_has_active_modifier(self):
+        pass
+
+    def test_has_active_fire(self):
+        pass
+
+    def test_has_indestructible_entities(self):
+        pass
+
+    def test_destructible_entities(self):
+        pass

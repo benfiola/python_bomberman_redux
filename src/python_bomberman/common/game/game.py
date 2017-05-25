@@ -1,154 +1,206 @@
-from python_bomberman.common.logging import logger
-from python_bomberman.common.game.board import Board
-from python_bomberman.common.utils import Coordinate
 import python_bomberman.common.game.entities as entities
 import time
+import python_bomberman.common.utils as utils
 
-@logger.create()
-class Game(object):
+
+class Game:
     def __init__(self, game_map):
-        self._board = Board(
-            height=game_map.height,
-            width=game_map.width
-        )
-        self._entities = {}
+        self._board = Board(width=game_map.width, height=game_map.height)
+        self._entities = EntityMap()
 
-        for entity in self._convert_map_objects(game_map.all_objects()):
-            self.add(entity)
-
-    def entity_by_id(self, unique_id):
-        if unique_id in self._entities:
-            return self._entities[unique_id]
-        return None
+        map_obj_cls = {}
+        to_check = entities.Entity.__subclasses__()
+        while to_check:
+            cls = to_check.pop()
+            to_check.extend(cls.__subclasses__())
+            if hasattr(cls, "identifier"):
+                map_obj_cls[cls.identifier] = cls
+        for map_obj in game_map.all_objects():
+            if map_obj.identifier in map_obj_cls:
+                self.add(map_obj_cls[map_obj.identifier](location=map_obj.location))
 
     def add(self, entity):
-        """
-        Will add an entity to both the entity map as well as the gameboard.
-        :param entity: Entity to be added
-        :return: None
-        """
+        self._entities.add(entity)
+
+        space = self._board.get(entity.logical_location)
+        if space.modifier:
+            space.modifier.modify(entity)
+            space.modifier.is_destroyed = True
+
         self._board.add(entity)
-        self._entities[entity.unique_id] = entity
 
     def remove(self, entity):
-        """
-        Will remove an entity from both the entity map as well as the gameboard.
-        :param entity: Entity to be removed
-        :return: None
-        """
+        self._entities.remove(entity)
         self._board.remove(entity)
-        self._entities.pop(entity.unique_id)
+
+    def process(self):
+        for entity in list(self.all_entities()):
+            # if the entity has been destroyed in this current iteration, there's no point
+            # in doing anything to it - it's going to be removed in this iteration.
+            if not entity.is_destroyed:
+                # check if entity can move and is moving
+                if isinstance(entity, entities.Movable) and entity.is_moving:
+                    entity.move_update()
+                    # if the entity is not longer moving, it's finished.
+                    if not entity.is_moving:
+                        space = self._board.get(entity.logical_location)
+                        # we now process whether the entity has walked into a modifier and can be modified.
+                        if space.has_active_modifier() and isinstance(entity, entities.Modifiable):
+                            space.modifier.modify(entity)
+                            space.modifier.is_destroyed = True
+                        # we now process whether the entity has walked into a fire and needs to be killed.
+                        if space.has_active_fire() and isinstance(entity, entities.Destroyable):
+                            entity.is_destroyed = True
+
+                # check if entity can burn and is burning
+                if isinstance(entity, entities.Burnable) and entity.is_burning:
+                    entity.burn_update()
+                    # if the entity is no longer burning, it's finished.
+                    if not entity.is_burning:
+                        entity.is_destroyed = True
+
+                # check if entity can detonate and is detonating
+                if isinstance(entity, entities.Detonatable) and entity.is_detonating:
+                    entity.detonate_update()
+                    # if the entity is no longer detonating, it's finished.
+                    if not entity.is_detonating:
+                        # determine the blast radius and destroy all destructible entities within.
+                        for location in self._board.blast_radius(entity.logical_location, entity.fire_distance):
+                            space = self._board.get(location)
+                            for to_destroy in space.destructible_entities():
+                                to_destroy.is_destroyed = True
+                            self.add(entities.Fire(location=location))
+                        # set this entity to be removed
+                        entity.is_destroyed = True
+                        # if the bomb belonged to someone, give them a bomb
+                        if entity.owner:
+                            entity.owner.bombs += 1
+
+            # regardless of whether anything has been done, update this entity's update time.
+            entity.last_update = time.time()
+
+            # finally, if this entity has been destroyed, remove it from the game.
+            if entity.is_destroyed:
+                self.remove(entity)
+
+    def all_entities(self):
+        return self._entities.all_entities()
+
+    def move(self, entity, location):
+        space = self._board.get(location)
+        if isinstance(entity, entities.Movable) and not space.has_collision():
+            self._board.remove(entity)
+            entity.logical_location = location
+            entity.is_moving = True
+            self._board.add(entity)
 
     def drop_bomb(self, entity):
-        if not entity.is_moving and entity.bombs:
-            bomb = entities.Bomb(
-                location=entity.logical_location,
-                owner=entity
-            )
+        if isinstance(entity, entities.Player) and not entity.is_moving and entity.bombs:
+            bomb = entities.Bomb(owner=entity, location=entity.logical_location)
             entity.bombs -= 1
             self.add(bomb)
             bomb.is_detonating = True
 
-    def move(self, entity, location):
-        """
-        Sets up an entity to be further processed for movement given a location.
-        :param entity: Entity that needs to be moved
-        :param location: desired Coordinate to move Entity to.
-        :return: 
-        """
-        if not self._board.get_space(location).has_collision():
-            self._board.remove(entity)
-            entity.is_moving = True
-            entity.logical_location = location
-            self._board.add(entity)
+    def _map_object_to_entity(self, map_object):
+        if map_object.identifier in self.MAP_OBJECT_MAP:
+            return self.MAP_OBJECT_MAP[map_object.identifier](location=map_object.location)
+        return None
 
-    def process(self):
-        """
-        Processes the gameboard and updates entities currently undergoing time-based modification.
-        :return: None
-        """
-        for entity in self._all_entities():
-            if isinstance(entity, entities.Movable) and entity.is_moving:
-                entity.move_update()
-                if not entity.is_moving:
-                    board_space = self._board.get_space(entity.logical_location)
-                    if board_space.modifier:
-                        modifier = board_space.modifier
-                        modifier.modify(entity)
-                        modifier.is_destroyed = True
-            if isinstance(entity, entities.Detonatable) and entity.is_detonating:
-                entity.detonate_update()
-                if entity.is_detonated:
-                    # flag our bomb as destroyed, give a bomb back to the owner
-                    entity.is_destroyed = True
 
-                    if isinstance(entity, entities.Bomb):
-                        entity.owner.bombs += 1
+class Board:
+    def __init__(self, width, height):
+        self._board = [[BoardSpace() for _ in range(0, height)] for _ in range(0, width)]
+        self.width = width
+        self.height = height
 
-                    # go in all directions, destroying everything until we run out of locations or have to stop.
-                    # TODO: check and ensure that locations are valid.
-                    for coordinate in self._get_detonation_locations(entity.logical_location, entity.fire_distance):
-                        board_space = self._board.get_space(coordinate)
-                        if board_space.modifier:
-                            board_space.modifier.is_destroyed = True
-                        if board_space.entity:
-                            board_space.entity.is_destroyed = True
-                        fire = entities.Fire(coordinate)
-                        fire.is_burning = True
-                        self.add(fire)
-            if isinstance(entity, entities.Burnable) and entity.is_burning:
-                entity.burn_update()
-                if not entity.is_burning:
-                    entity.is_destroyed = True
+    def add(self, entity):
+        self._board[entity.logical_location.x][entity.logical_location.y].add(entity)
 
-            # update last update time
-            entity.last_update = time.time()
+    def remove(self, entity):
+        self._board[entity.logical_location.x][entity.logical_location.y].remove(entity)
 
-        # now clean up anything that's been destroyed
-        for entity in [entity for entity in self._all_entities() if isinstance(entity, entities.Destroyable) and entity.is_destroyed]:
-            self.remove(entity)
+    def get(self, location):
+        return self._board[location.x][location.y]
 
-    def _get_detonation_locations(self, location, fire_distance):
+    def blast_radius(self, location, radius):
         to_return = [location]
-
-        # consider each direction a lambda that takes a distance argument
-        # and modifies the passed in location.
-        for direction in [
-            lambda dist: Coordinate(location.x+dist, location.y),
-            lambda dist: Coordinate(location.x-dist, location.y),
-            lambda dist: Coordinate(location.x, location.y+dist),
-            lambda dist: Coordinate(location.x, location.y-dist)
-        ]:
-            # for each distance lambda, lets iterate over the range of the
-            # bomb explosion
-            for distance in range(1, fire_distance):
-                # for each newly generated coordinate, lets
-                # see if we've encountered something that we can't
-                # destroy.  if so, we stop here, otherwise, we continue
-                # adding locations to our list we're going to return.
-                new_location = direction(distance)
-                board_space = self._board.get_space(new_location)
-                if not isinstance(board_space.entity, entities.Destroyable):
+        direction_lambdas = [
+            lambda loc, mod: utils.Coordinate(loc.x + mod, loc.y),
+            lambda loc, mod: utils.Coordinate(loc.x - mod, loc.y),
+            lambda loc, mod: utils.Coordinate(loc.x, loc.y + mod),
+            lambda loc, mod: utils.Coordinate(loc.x, loc.y - mod)
+        ]
+        for direction in direction_lambdas:
+            for modifier in range(1, radius):
+                potential_location = direction(location, modifier)
+                space = self.get(potential_location)
+                if space.has_indestructible_entities():
                     break
-                to_return.append(new_location)
+                to_return.append(potential_location)
         return to_return
 
-    @classmethod
-    def _entity_class_helper(cls, _class, to_return):
-        for _subclass in _class.__subclasses__():
-            if hasattr(_subclass, "identifier"):
-                to_return[_subclass.identifier] = _subclass
-            cls._entity_class_helper(_subclass, to_return)
+    def all_entities(self):
+        return [entity for row in self._board for space in row for entity in space.all_entities()]
 
-    @classmethod
-    def _convert_map_objects(cls, map_objs):
-        entity_classes = {}
-        cls._entity_class_helper(entities.Entity, entity_classes)
-        return [
-            entity_classes[map_obj.identifier](
-                location=map_obj.location
-            ) for map_obj in map_objs if map_obj.identifier in entity_classes
-        ]
 
-    def _all_entities(self):
-        return list(self._entities.values())
+class EntityMap:
+    def __init__(self):
+        self._entities = {}
+
+    def add(self, entity):
+        self._entities[entity.unique_id] = entity
+
+    def remove(self, entity):
+        self._entities.pop(entity.unique_id) if entity.unique_id in self._entities else None
+
+    def get(self, unique_id):
+        return self._entities[unique_id] if unique_id in self._entities else None
+
+    def all_entities(self):
+        return self._entities.values()
+
+
+class BoardSpace:
+    def __init__(self):
+        self.modifier = None
+        self.fire = None
+        self.bomb = None
+        self.entity = None
+
+    def has_collision(self):
+        return self.bomb is not None or isinstance(self.entity, entities.Collideable)
+
+    def add(self, entity):
+        setattr(self, self._entity_to_attribute(entity), entity)
+
+    def remove(self, entity):
+        setattr(self, self._entity_to_attribute(entity), None)
+
+    def has_active_modifier(self):
+        return self.modifier is not None and not self.modifier.is_destroyed
+
+    def has_active_fire(self):
+        return self.fire is not None and self.fire.is_burning and not self.fire.is_destroyed
+
+    def has_indestructible_entities(self):
+        for entity in self.all_entities():
+            if not isinstance(entity, entities.Destroyable):
+                return True
+        return False
+
+    def destructible_entities(self):
+        return [entity for entity in self.all_entities() if isinstance(entity, entities.Destroyable)]
+
+    def all_entities(self):
+        return [entity for entity in [self.modifier, self.fire, self.bomb, self.entity] if entity is not None]
+
+    @staticmethod
+    def _entity_to_attribute(entity):
+        if isinstance(entity, entities.Bomb):
+            return "bomb"
+        elif isinstance(entity, entities.Modifier):
+            return "modifier"
+        elif isinstance(entity, entities.Fire):
+            return "fire"
+        return "entity"
+
