@@ -126,7 +126,7 @@ class Destroyable(Entity):
         super().__init__(**kwargs)
 
 
-class Player(Movable, Destroyable, Collideable):
+class Player(Movable, Destroyable, Collideable, Modifiable):
     identifier = "player"
 
     def __init__(self, location, unique_id=None):

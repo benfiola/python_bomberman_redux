@@ -3,6 +3,8 @@ import python_bomberman.common.game.entities as entities
 import python_bomberman.common.map as map
 import python_bomberman.common.utils as utils
 import pytest
+import time
+
 
 class TestGameSuite:
     @pytest.fixture
@@ -28,6 +30,23 @@ class TestGameSuite:
         new_game = game.Game(empty_game_map)
         return new_game
 
+    @pytest.fixture
+    def fire(self):
+        return entities.Fire(
+            utils.Coordinate(1, 1)
+        )
+
+    @pytest.fixture
+    def bomb_modifier(self):
+        return entities.BombModifier(utils.Coordinate(1, 1))
+
+    @pytest.fixture
+    def fire_modifier(self):
+        return entities.FireModifier(utils.Coordinate(1, 1))
+
+    @pytest.fixture
+    def movement_modifier(self):
+        return entities.MovementModifier(utils.Coordinate(1, 1))
 
     # for now, provided we test the attributes exclusively, the only thing
     # we need to test here is whether or not the game will automatically add
@@ -66,10 +85,28 @@ class TestGameSuite:
         assert empty_game._board.get(old_location).entity == player_entity
 
         empty_game.move(player_entity, new_location)
-
         assert player_entity.is_moving is True
-        assert player_entity.logical_location is new_location
+        assert player_entity.physical_location == old_location
+        assert player_entity.logical_location == new_location
         assert empty_game._board.get(new_location).entity == player_entity
+
+    def test_process_move(self, empty_game, player_entity):
+        self.test_move(empty_game, player_entity)
+        distance = abs(player_entity.logical_location.x - player_entity.physical_location.x)
+        time_to_sleep = (distance/player_entity.movement_speed)
+        old_location = player_entity.physical_location
+        new_location = player_entity.logical_location
+
+        time.sleep(time_to_sleep/2.0)
+        empty_game.process()
+        assert old_location < player_entity.physical_location < new_location
+        assert player_entity.is_moving is True
+
+        time.sleep(time_to_sleep/2.0)
+        empty_game.process()
+        assert player_entity.is_moving is False
+        assert player_entity.physical_location == new_location
+        assert player_entity.logical_location == new_location
 
     def test_drop_bomb(self, empty_game, player_entity):
         empty_game.add(player_entity)
@@ -83,6 +120,80 @@ class TestGameSuite:
         assert player_entity.bombs == 0
         assert space.bomb is not None
         assert space.bomb.is_detonating is True
+
+    def test_process_bomb(self, empty_game, player_entity):
+        self.test_drop_bomb(empty_game, player_entity)
+
+        bomb_count = player_entity.bombs
+        space = empty_game._board.get(player_entity.logical_location)
+        bomb = space.bomb
+
+        bomb_duration = bomb.bomb_duration
+
+        time.sleep(bomb_duration/2.0)
+        empty_game.process()
+        assert bomb_duration > bomb.bomb_duration > 0
+
+        time.sleep(bomb_duration/2.0)
+        empty_game.process()
+        assert bomb.bomb_duration <= 0
+        assert bomb.is_detonating is False
+        assert bomb.is_destroyed is True
+        assert player_entity.bombs == bomb_count + 1
+
+    def test_process_fire(self, empty_game, fire):
+        empty_game.add(fire)
+        fire.is_burning = True
+        fire_duration = fire.fire_duration
+
+        time.sleep(fire_duration/2.0)
+        empty_game.process()
+        assert fire_duration > fire.fire_duration > 0
+        assert fire.is_burning is True
+
+        time.sleep(fire_duration/2.0)
+        empty_game.process()
+        assert fire.fire_duration <= 0
+        assert fire.is_burning is False
+        assert fire.is_destroyed is True
+
+    def _test_modifier(self, curr_game, curr_player_entity, curr_modifier, attribute):
+        old_val = getattr(curr_player_entity, attribute)
+
+        # test add modifier first, then player
+        curr_game.add(curr_modifier)
+        curr_game.add(curr_player_entity)
+        assert getattr(curr_player_entity, attribute) == (old_val + curr_modifier.amount)
+        assert curr_modifier.is_destroyed is True
+
+        # remove the modifier, and reset the modified player attribute
+        curr_game.remove(curr_modifier)
+        setattr(curr_player_entity, attribute, old_val)
+
+        curr_game.add(curr_modifier)
+        assert getattr(curr_player_entity, attribute) == (old_val + curr_modifier.amount)
+        assert curr_modifier.is_destroyed is True
+
+    def test_process_movement_modifier(self, empty_game, player_entity, movement_modifier):
+        self._test_modifier(empty_game, player_entity, movement_modifier, "movement_speed")
+
+    def test_process_fire_distance_modifier(self, empty_game, player_entity, fire_modifier):
+        self._test_modifier(empty_game, player_entity, fire_modifier, "fire_distance")
+
+    def test_process_bomb_modifier(self, empty_game, player_entity, bomb_modifier):
+        self._test_modifier(empty_game, player_entity, bomb_modifier, "bombs")
+
+    def test_process_remove_destroyed_entity(self, empty_game, player_entity):
+        empty_game.add(player_entity)
+        assert player_entity in empty_game.all_entities()
+        assert empty_game._entities.get(player_entity.unique_id) == player_entity
+        assert player_entity in empty_game._board.get(player_entity.logical_location).all_entities()
+
+        player_entity.is_destroyed = True
+        empty_game.process()
+        assert player_entity not in empty_game.all_entities()
+        assert empty_game._entities.get(player_entity.unique_id) is None
+        assert player_entity not in empty_game._board.get(player_entity.logical_location).all_entities()
 
 
 class TestBoardSuite:

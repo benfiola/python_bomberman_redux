@@ -21,13 +21,20 @@ class Game:
 
     def add(self, entity):
         self._entities.add(entity)
+        self._board.add(entity)
 
         space = self._board.get(entity.logical_location)
-        if space.modifier:
+
+        # special logic for handling modifiers added here
+        # we can either add an entity on top of a modifier, or add a modifier on top of an
+        # entity - in both cases, we want to immediately give the entity the modifier
+        # and get rid of the modifier.
+        if isinstance(space.entity, entities.Modifiable) and isinstance(entity, entities.Modifier):
+            entity.modify(space.entity)
+            entity.is_destroyed = True
+        elif isinstance(entity, entities.Modifiable) and space.modifier:
             space.modifier.modify(entity)
             space.modifier.is_destroyed = True
-
-        self._board.add(entity)
 
     def remove(self, entity):
         self._entities.remove(entity)
@@ -69,7 +76,9 @@ class Game:
                             space = self._board.get(location)
                             for to_destroy in space.destructible_entities():
                                 to_destroy.is_destroyed = True
-                            self.add(entities.Fire(location=location))
+                            fire = entities.Fire(location=location)
+                            self.add(fire)
+                            fire.is_burning = True
                         # set this entity to be removed
                         entity.is_destroyed = True
                         # if the bomb belonged to someone, give them a bomb
