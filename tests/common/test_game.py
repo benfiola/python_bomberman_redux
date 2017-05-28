@@ -86,51 +86,208 @@ class TestGameSuite:
 
 
 class TestBoardSuite:
+    @pytest.fixture
+    def board(self):
+        return game.Board(1, 1)
+
+    @pytest.fixture
+    def entity(self):
+        return entities.Player(utils.Coordinate(0, 0))
+
     def test_init(self):
-        pass
+        width = 1
+        height = 2
+        board = game.Board(width, height)
+        assert board.width == width
+        assert board.height == height
+        assert len(board._board) == width
+        assert len(board._board[0]) == height
+        for row in board._board:
+            for space in row:
+                assert isinstance(space, game.BoardSpace)
+        assert len(board.all_entities()) == 0
 
-    def test_add(self):
-        pass
+    def test_add(self, board, entity):
+        assert len(board.all_entities()) == 0
+        board.add(entity)
+        assert len(board.all_entities()) == 1
+        assert entity in board.all_entities()
 
-    def test_remove(self):
-        pass
+    def test_remove(self, board, entity):
+        self.test_add(board, entity)
+        board.remove(entity)
+        assert len(board.all_entities()) == 0
+        assert entity not in board.all_entities()
 
     def test_blast_radius(self):
-        pass
+        board = game.Board(5, 5)
+        player = entities.Player(utils.Coordinate(2, 2))
+        bomb = entities.Bomb(location=utils.Coordinate(2, 2), owner=player)
+        board.add(player)
+        board.add(bomb)
+        walls = [
+            entities.IndestructibleWall(utils.Coordinate(2, 0)),
+            entities.IndestructibleWall(utils.Coordinate(3, 2))
+        ]
+        for wall in walls:
+            board.add(wall)
+        locations = [
+            utils.Coordinate(2, 1),
+            utils.Coordinate(0, 2),
+            utils.Coordinate(1, 2),
+            utils.Coordinate(2, 2),
+            utils.Coordinate(2, 3),
+            utils.Coordinate(2, 4)
+        ]
+        blast_radius = board.blast_radius(bomb.logical_location, bomb.fire_distance)
+        assert len(locations) == len(blast_radius)
+        for location in locations:
+            assert location in blast_radius
 
 
 class TestEntityMapSuite:
-    def test_init(self):
-        pass
+    @pytest.fixture
+    def entity_map(self):
+        return game.EntityMap()
 
-    def test_add(self):
-        pass
+    @pytest.fixture
+    def entity(self):
+        return entities.Player(utils.Coordinate(0, 0))
 
-    def test_remove(self):
-        pass
+    def test_init(self, entity_map):
+        assert len(entity_map._entities) == 0
+        assert len(entity_map.all_entities()) == 0
+
+    def test_add(self, entity_map, entity):
+        assert len(entity_map.all_entities()) == 0
+        entity_map.add(entity)
+        assert entity_map.get(entity.unique_id) == entity
+        assert len(entity_map.all_entities()) == 1
+
+    def test_remove(self, entity_map, entity):
+        self.test_add(entity_map, entity)
+        entity_map.remove(entity)
+        assert entity_map.get(entity.unique_id) is None
+        assert len(entity_map.all_entities()) == 0
 
 
 class TestBoardSpaceSuite:
-    def test_init(self):
-        pass
+    @pytest.fixture
+    def space(self):
+        return game.BoardSpace()
 
-    def test_has_collision(self):
-        pass
+    @pytest.fixture
+    def fire(self):
+        return entities.Fire(utils.Coordinate(0, 0))
 
-    def test_add(self):
-        pass
+    @pytest.fixture
+    def modifier(self):
+        return entities.BombModifier(utils.Coordinate(0, 0))
 
-    def test_remove(self):
-        pass
+    @pytest.fixture
+    def bomb(self, player):
+        return entities.Bomb(location=utils.Coordinate(0, 0), owner=player)
 
-    def test_has_active_modifier(self):
-        pass
+    @pytest.fixture
+    def player(self):
+        return entities.Player(utils.Coordinate(0, 0))
 
-    def test_has_active_fire(self):
-        pass
+    @pytest.fixture
+    def indestructible_wall(self):
+        return entities.IndestructibleWall(utils.Coordinate(0, 0))
 
-    def test_has_indestructible_entities(self):
-        pass
+    @pytest.fixture
+    def destructible_wall(self):
+        return entities.DestructibleWall(utils.Coordinate(0, 0))
 
-    def test_destructible_entities(self):
-        pass
+    def test_init(self, space):
+        assert space.modifier is None
+        assert space.fire is None
+        assert space.entity is None
+        assert space.bomb is None
+
+    def test_has_collision(self, space, player, fire, modifier, bomb):
+        assert space.has_collision() is False
+        self.test_add_fire(space, fire)
+        assert space.has_collision() is False
+        self.test_add_modifier(space, modifier)
+        assert space.has_collision() is False
+        self.test_add_entity(space, player)
+        assert space.has_collision() is True
+        self.test_remove_entity(space, player)
+        assert space.has_collision() is False
+        self.test_add_bomb(space, bomb)
+        assert space.has_collision() is True
+        self.test_remove_bomb(space, bomb)
+        assert space.has_collision() is False
+
+    def test_add_entity(self, space, player):
+        space.add(player)
+        assert space.entity == player
+
+    def test_add_fire(self, space, fire):
+        space.add(fire)
+        assert space.fire == fire
+
+    def test_add_modifier(self, space, modifier):
+        space.add(modifier)
+        assert space.modifier == modifier
+
+    def test_add_bomb(self, space, bomb):
+        space.add(bomb)
+        assert space.bomb == bomb
+
+    def test_remove_entity(self, space, player):
+        self.test_add_entity(space, player)
+        space.remove(player)
+        assert space.entity is None
+
+    def test_remove_fire(self, space, fire):
+        self.test_add_fire(space, fire)
+        space.remove(fire)
+        assert space.fire is None
+
+    def test_remove_modifier(self, space, modifier):
+        self.test_add_modifier(space, modifier)
+        space.remove(modifier)
+        assert space.modifier is None
+
+    def test_remove_bomb(self, space, bomb):
+        self.test_add_bomb(space, bomb)
+        space.remove(bomb)
+        assert space.bomb is None
+
+    def test_has_active_modifier(self, space, modifier):
+        assert space.has_active_modifier() is False
+        self.test_add_modifier(space, modifier)
+        assert space.has_active_modifier() is True
+        modifier.is_destroyed = True
+        assert space.has_active_modifier() is False
+
+    def test_has_active_fire(self, space, fire):
+        assert space.has_active_fire() is False
+        self.test_add_fire(space, fire)
+        assert space.has_active_fire() is False
+        fire.is_burning = True
+        assert space.has_active_fire() is True
+        fire.is_destroyed = True
+        assert space.has_active_fire() is False
+
+    def test_has_indestructible_entities(self, space, indestructible_wall):
+        assert space.has_indestructible_entities() is False
+        space.add(indestructible_wall)
+        assert space.has_indestructible_entities() is True
+
+    def test_destructible_entities(self, space, modifier, fire, bomb, indestructible_wall):
+        self.test_add_entity(space, indestructible_wall)
+        self.test_add_fire(space, fire)
+        self.test_add_bomb(space, bomb)
+        self.test_add_modifier(space, modifier)
+        destructible_entities = [
+            modifier,
+            fire,
+            bomb
+        ]
+        assert len(destructible_entities) == len(space.destructible_entities())
+        for entity in destructible_entities:
+            assert entity in (space.destructible_entities())

@@ -101,11 +101,6 @@ class Game:
             self.add(bomb)
             bomb.is_detonating = True
 
-    def _map_object_to_entity(self, map_object):
-        if map_object.identifier in self.MAP_OBJECT_MAP:
-            return self.MAP_OBJECT_MAP[map_object.identifier](location=map_object.location)
-        return None
-
 
 class Board:
     def __init__(self, width, height):
