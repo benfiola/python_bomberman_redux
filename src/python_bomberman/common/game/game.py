@@ -45,7 +45,7 @@ class Game:
             # if the entity has been destroyed in this current iteration, there's no point
             # in doing anything to it - it's going to be removed in this iteration.
             if not entity.is_destroyed:
-                # check if entity can move and is moving
+                # handle movement processing
                 if isinstance(entity, entities.Movable) and entity.is_moving:
                     entity.move_update()
                     # if the entity is not longer moving, it's finished.
@@ -59,14 +59,14 @@ class Game:
                         if space.has_active_fire() and isinstance(entity, entities.Destroyable):
                             entity.is_destroyed = True
 
-                # check if entity can burn and is burning
+                # handle fire processing
                 if isinstance(entity, entities.Burnable) and entity.is_burning:
                     entity.burn_update()
                     # if the entity is no longer burning, it's finished.
                     if not entity.is_burning:
                         entity.is_destroyed = True
 
-                # check if entity can detonate and is detonating
+                # handle detonation processing
                 if isinstance(entity, entities.Detonatable) and entity.is_detonating:
                     entity.detonate_update()
                     # if the entity is no longer detonating, it's finished.
@@ -128,12 +128,15 @@ class Board:
 
     def blast_radius(self, location, radius):
         to_return = [location]
+
+        # TODO: replace these with generators.
         direction_lambdas = [
             lambda loc, mod: utils.Coordinate(loc.x + mod, loc.y),
             lambda loc, mod: utils.Coordinate(loc.x - mod, loc.y),
             lambda loc, mod: utils.Coordinate(loc.x, loc.y + mod),
             lambda loc, mod: utils.Coordinate(loc.x, loc.y - mod)
         ]
+
         for direction in direction_lambdas:
             for modifier in range(1, radius):
                 potential_location = direction(location, modifier)

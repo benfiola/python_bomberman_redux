@@ -141,6 +141,10 @@ class TestGameSuite:
         assert bomb.is_destroyed is True
         assert player_entity.bombs == bomb_count + 1
 
+        # since the player hasn't moved since dropping the bomb
+        # they should also be destroyed
+        assert player_entity.is_destroyed is True
+
     def test_process_fire(self, empty_game, fire):
         empty_game.add(fire)
         fire.is_burning = True
@@ -194,6 +198,37 @@ class TestGameSuite:
         assert player_entity not in empty_game.all_entities()
         assert empty_game._entities.get(player_entity.unique_id) is None
         assert player_entity not in empty_game._board.get(player_entity.logical_location).all_entities()
+
+    def test_process_move_into_modifier(self, empty_game, player_entity):
+        distance = 1
+        modifier_location = utils.Coordinate(player_entity.logical_location.x + distance, player_entity.logical_location.y)
+        modifier = entities.BombModifier(modifier_location)
+        modifier_attribute = "bombs"
+        movement_duration = distance/player_entity.movement_speed
+        old_attribute_value = getattr(player_entity, modifier_attribute)
+
+        empty_game.add(player_entity)
+        empty_game.add(modifier)
+        empty_game.move(player_entity, modifier_location)
+        time.sleep(movement_duration)
+        empty_game.process()
+
+        assert getattr(player_entity, modifier_attribute) == old_attribute_value + 1
+        assert modifier.is_destroyed is True
+
+    def test_process_move_into_fire(self, empty_game, player_entity):
+        distance = 1
+        fire_location = utils.Coordinate(player_entity.logical_location.x + distance, player_entity.logical_location.y)
+        fire = entities.Fire(fire_location)
+        fire.is_burning = True
+        movement_duration = distance / player_entity.movement_speed
+
+        empty_game.add(player_entity)
+        empty_game.add(fire)
+        empty_game.move(player_entity, fire_location)
+        time.sleep(movement_duration)
+        empty_game.process()
+        assert player_entity.is_destroyed is True
 
 
 class TestBoardSuite:
