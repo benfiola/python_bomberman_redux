@@ -48,7 +48,7 @@ class Movable(Entity):
         :param duration: Duration of time since last update in seconds
         :return: a Coordinate object representing the new location of the entity.
         """
-        coords = [
+        coordinates = [
             *self.physical_location
         ]
         distances = [0, 0]
@@ -62,24 +62,23 @@ class Movable(Entity):
             if self.movement_direction == MovementDirection.UP:
                 distances[1] = -distances[1]
 
-        for index, (coord, dist, dimension) in enumerate(zip(coords, distances, board_dimensions)):
-            coords[index] = coord + dist
+        for index, (coordinate, distance, dimension) in enumerate(zip(coordinates, distances, board_dimensions)):
+            coordinates[index] = coordinate + distance
 
             # if we're heading off the board, let's use this opportunity
             # to teleport ourselves onto the other side of the board
-            if coords[index] < -0.5:
-                coords[index] += dimension
-            elif coords[index] > (dimension - .5):
-                coords[index] -= dimension
+            if coordinates[index] < -0.5:
+                coordinates[index] += dimension
+            elif coordinates[index] > (dimension - .5):
+                coordinates[index] -= dimension
 
-        return Coordinate(*coords)
+        return Coordinate(*coordinates)
 
     def move_update(self, board_dimensions):
         """
         Moves an entity towards its logical location.
         :return: None
         """
-        done_moving = True
         curr_time = time.time()
 
         new_location = self._new_movement_location(curr_time - self.last_update, board_dimensions)
