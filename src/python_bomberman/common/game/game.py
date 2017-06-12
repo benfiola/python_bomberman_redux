@@ -58,6 +58,8 @@ class Game:
                         # we now process whether the entity has walked into a fire and needs to be killed.
                         if space.has_active_fire() and isinstance(entity, entities.Destroyable):
                             entity.is_destroyed = True
+                        if entity.movement_spaces:
+                            self.move(entity, entity.movement_direction, entity.movement_spaces)
 
                 # handle fire processing
                 if isinstance(entity, entities.Burnable) and entity.is_burning:
@@ -95,14 +97,42 @@ class Game:
     def all_entities(self):
         return self._entities.all_entities()
 
-    def move(self, entity, location, direction):
+    def move(self, entity, direction, num_spaces):
+        new_location = self._get_move_location(entity, direction)
+        self._set_move_state(entity, utils.Coordinate(*new_location), direction, num_spaces)
+
+    def _get_move_location(self, entity, direction, num_spaces=1):
+        location = [
+            *entity.logical_location
+        ]
+        if direction == entities.MovementDirection.UP:
+            location[1] -= num_spaces
+        elif direction == entities.MovementDirection.DOWN:
+            location[1] += num_spaces
+        elif direction == entities.MovementDirection.LEFT:
+            location[0] -= num_spaces
+        elif direction == entities.MovementDirection.RIGHT:
+            location[0] += num_spaces
+        for index, (loc, dim) in enumerate(zip(location, self._board.dimensions())):
+            if loc < 0:
+                location[index] += dim
+            if loc >= dim:
+                location[index] -= dim
+        return utils.Coordinate(*location)
+
+    def _set_move_state(self, entity, location, direction, num_spaces):
         space = self._board.get(location)
-        if isinstance(entity, entities.Movable) and not space.has_collision():
-            self._board.remove(entity)
-            entity.movement_direction = direction
-            entity.logical_location = location
-            entity.is_moving = True
-            self._board.add(entity)
+        if isinstance(entity, entities.Movable):
+            if not space.has_collision():
+                self._board.remove(entity)
+                entity.movement_direction = direction
+                entity.movement_spaces = num_spaces
+                entity.logical_location = location
+                entity.is_moving = True
+                self._board.add(entity)
+            else:
+                entity.movement_direction = None
+                entity.movement_spaces = None
 
     def drop_bomb(self, entity):
         if isinstance(entity, entities.Player) and not entity.is_moving and entity.bombs:

@@ -38,6 +38,7 @@ class Movable(Entity):
     def __init__(self, movement_speed, **kwargs):
         super().__init__(**kwargs)
         self.is_moving = False
+        self.movement_spaces = None
         self.movement_direction = None
         self.movement_speed = movement_speed
 
@@ -100,6 +101,10 @@ class Movable(Entity):
         if done_moving:
             self.is_moving = False
             self.physical_location = self.logical_location
+            self.movement_spaces -= 1
+            if self.movement_spaces <= 0:
+                self.movement_spaces = None
+                self.movement_direction = None
 
 
 class Detonatable(Entity):

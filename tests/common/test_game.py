@@ -78,14 +78,15 @@ class TestGameSuite:
         self.test_add(empty_game, player_entity)
 
         old_location = player_entity.logical_location
-        new_location = utils.Coordinate(old_location.x + 1, old_location.y)
         movement_direction = entities.MovementDirection.RIGHT
+        num_spaces = 1
+        new_location = empty_game._get_move_location(player_entity, movement_direction)
 
         assert player_entity.is_moving is False
         assert player_entity.logical_location == old_location
         assert empty_game._board.get(old_location).entity == player_entity
 
-        empty_game.move(player_entity, new_location, movement_direction)
+        empty_game.move(player_entity, movement_direction, num_spaces)
         assert player_entity.is_moving is True
         assert player_entity.physical_location == old_location
         assert player_entity.logical_location == new_location
@@ -202,8 +203,8 @@ class TestGameSuite:
 
     def test_process_move_into_modifier(self, empty_game, player_entity):
         distance = 1
-        modifier_location = utils.Coordinate(player_entity.logical_location.x + distance, player_entity.logical_location.y)
         movement_direction = entities.MovementDirection.RIGHT
+        modifier_location = empty_game._get_move_location(player_entity, movement_direction)
         modifier = entities.BombModifier(modifier_location)
         modifier_attribute = "bombs"
         movement_duration = distance/player_entity.movement_speed
@@ -211,7 +212,7 @@ class TestGameSuite:
 
         empty_game.add(player_entity)
         empty_game.add(modifier)
-        empty_game.move(player_entity, modifier_location, movement_direction)
+        empty_game.move(player_entity, movement_direction, distance)
         time.sleep(movement_duration)
         empty_game.process()
 
@@ -220,34 +221,34 @@ class TestGameSuite:
 
     def test_process_move_into_fire(self, empty_game, player_entity):
         distance = 1
-        fire_location = utils.Coordinate(player_entity.logical_location.x + distance, player_entity.logical_location.y)
+        movement_direction = entities.MovementDirection.RIGHT
+        fire_location = empty_game._get_move_location(player_entity, movement_direction)
         fire = entities.Fire(fire_location)
         fire.is_burning = True
-        movement_direction = entities.MovementDirection.RIGHT
         movement_duration = distance / player_entity.movement_speed
 
         empty_game.add(player_entity)
         empty_game.add(fire)
-        empty_game.move(player_entity, fire_location, movement_direction)
+        empty_game.move(player_entity, movement_direction, distance)
         time.sleep(movement_duration)
         empty_game.process()
         assert player_entity.is_destroyed is True
 
     def test_process_move_out_of_board(self, empty_game):
         old_location = utils.Coordinate(0, 0)
+        movement_direction = entities.MovementDirection.LEFT
+        distance = 1
         dimensions = empty_game._board.dimensions()
 
         player_entity = entities.Player(
             location=old_location
         )
-        empty_game.add(player_entity)
-
-        distance = 1
-        movement_direction = entities.MovementDirection.LEFT
-        new_location = utils.Coordinate(empty_game._board.width - distance, 0)
+        new_location = empty_game._get_move_location(player_entity, movement_direction)
         movement_duration = distance / player_entity.movement_speed
 
-        empty_game.move(player_entity, new_location, movement_direction)
+        empty_game.add(player_entity)
+
+        empty_game.move(player_entity, movement_direction, distance)
         assert player_entity.logical_location == new_location
         assert player_entity.is_moving is True
         assert player_entity.movement_direction == movement_direction
