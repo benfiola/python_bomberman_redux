@@ -31,14 +31,31 @@ class Game:
         # and get rid of the modifier.
         if isinstance(space.entity, entities.Modifiable) and isinstance(entity, entities.Modifier):
             entity.modify(space.entity)
-            entity.is_destroyed = True
+            entity.destroy()
         elif isinstance(entity, entities.Modifiable) and space.modifier:
             space.modifier.modify(entity)
-            space.modifier.is_destroyed = True
+            space.modifier.destroy()
 
-    def remove(self, entity):
-        self._entities.remove(entity)
-        self._board.remove(entity)
+    def all_entities(self):
+        return self._entities.all_entities()
+
+    def drop_bomb(self, entity):
+        if isinstance(entity, entities.Player) and not entity.is_moving and entity.bombs:
+            bomb = entities.Bomb(owner=entity, location=entity.logical_location)
+            entity.bombs -= 1
+            self.add(bomb)
+            bomb.detonate_set()
+
+    def move(self, entity, direction, num_spaces):
+        new_location = self._board.get_relative_location(entity.logical_location, direction)
+        space = self._board.get(new_location)
+        if isinstance(entity, entities.Movable):
+            if not space.has_collision():
+                self._board.remove(entity)
+                entity.move_set(new_location, direction, num_spaces)
+                self._board.add(entity)
+            else:
+                entity.move_reset()
 
     def process(self):
         for entity in list(self.all_entities()):
@@ -54,10 +71,10 @@ class Game:
                         # we now process whether the entity has walked into a modifier and can be modified.
                         if space.has_active_modifier() and isinstance(entity, entities.Modifiable):
                             space.modifier.modify(entity)
-                            space.modifier.is_destroyed = True
+                            space.modifier.destroy()
                         # we now process whether the entity has walked into a fire and needs to be killed.
                         if space.has_active_fire() and isinstance(entity, entities.Destroyable):
-                            entity.is_destroyed = True
+                            entity.destroy()
                         if entity.movement_spaces:
                             self.move(entity, entity.movement_direction, entity.movement_spaces)
 
@@ -66,7 +83,7 @@ class Game:
                     entity.burn_update()
                     # if the entity is no longer burning, it's finished.
                     if not entity.is_burning:
-                        entity.is_destroyed = True
+                        entity.destroy()
 
                 # handle detonation processing
                 if isinstance(entity, entities.Detonatable) and entity.is_detonating:
@@ -77,12 +94,12 @@ class Game:
                         for location in self._board.blast_radius(entity.logical_location, entity.fire_distance):
                             space = self._board.get(location)
                             for to_destroy in space.destructible_entities():
-                                to_destroy.is_destroyed = True
+                                to_destroy.destroy()
                             fire = entities.Fire(location=location)
                             self.add(fire)
-                            fire.is_burning = True
+                            fire.burn_set()
                         # set this entity to be removed
-                        entity.is_destroyed = True
+                        entity.destroy()
                         # if the bomb belonged to someone, give them a bomb
                         if entity.owner:
                             entity.owner.bombs += 1
@@ -94,26 +111,9 @@ class Game:
             if entity.is_destroyed:
                 self.remove(entity)
 
-    def all_entities(self):
-        return self._entities.all_entities()
-
-    def move(self, entity, direction, num_spaces):
-        new_location = self._board.get_relative_location(entity.logical_location, direction)
-        space = self._board.get(new_location)
-        if isinstance(entity, entities.Movable):
-            if not space.has_collision():
-                self._board.remove(entity)
-                entity.move_set(new_location, direction, num_spaces)
-                self._board.add(entity)
-            else:
-                entity.move_reset()
-
-    def drop_bomb(self, entity):
-        if isinstance(entity, entities.Player) and not entity.is_moving and entity.bombs:
-            bomb = entities.Bomb(owner=entity, location=entity.logical_location)
-            entity.bombs -= 1
-            self.add(bomb)
-            bomb.is_detonating = True
+    def remove(self, entity):
+        self._entities.remove(entity)
+        self._board.remove(entity)
 
 
 class Board:
@@ -122,14 +122,26 @@ class Board:
         self.width = width
         self.height = height
 
-    def dimensions(self):
-        return utils.Coordinate(self.width, self.height)
-
     def add(self, entity):
         self._board[entity.logical_location.x][entity.logical_location.y].add(entity)
 
-    def remove(self, entity):
-        self._board[entity.logical_location.x][entity.logical_location.y].remove(entity)
+    def all_entities(self):
+        return [entity for row in self._board for space in row for entity in space.all_entities()]
+
+    def blast_radius(self, location, radius):
+        to_return = [location]
+
+        for direction in entities.MovementDirection.all_directions():
+            for distance in range(1, radius):
+                potential_location = self.get_relative_location(location, direction, distance)
+                space = self.get(potential_location)
+                if space.has_indestructible_entities():
+                    break
+                to_return.append(potential_location)
+        return to_return
+
+    def dimensions(self):
+        return utils.Coordinate(self.width, self.height)
 
     def get(self, location):
         return self._board[location.x][location.y]
@@ -153,20 +165,8 @@ class Board:
                 new_location[index] -= dim
         return utils.Coordinate(*new_location)
 
-    def blast_radius(self, location, radius):
-        to_return = [location]
-
-        for direction in entities.MovementDirection.all_directions():
-            for distance in range(1, radius):
-                potential_location = self.get_relative_location(location, direction, distance)
-                space = self.get(potential_location)
-                if space.has_indestructible_entities():
-                    break
-                to_return.append(potential_location)
-        return to_return
-
-    def all_entities(self):
-        return [entity for row in self._board for space in row for entity in space.all_entities()]
+    def remove(self, entity):
+        self._board[entity.logical_location.x][entity.logical_location.y].remove(entity)
 
 
 class EntityMap:
@@ -176,14 +176,14 @@ class EntityMap:
     def add(self, entity):
         self._entities[entity.unique_id] = entity
 
-    def remove(self, entity):
-        self._entities.pop(entity.unique_id) if entity.unique_id in self._entities else None
+    def all_entities(self):
+        return self._entities.values()
 
     def get(self, unique_id):
         return self._entities[unique_id] if unique_id in self._entities else None
 
-    def all_entities(self):
-        return self._entities.values()
+    def remove(self, entity):
+        self._entities.pop(entity.unique_id) if entity.unique_id in self._entities else None
 
 
 class BoardSpace:
@@ -193,20 +193,23 @@ class BoardSpace:
         self.bomb = None
         self.entity = None
 
-    def has_collision(self):
-        return self.bomb is not None or isinstance(self.entity, entities.Collideable)
-
     def add(self, entity):
         setattr(self, self._entity_to_attribute(entity), entity)
 
-    def remove(self, entity):
-        setattr(self, self._entity_to_attribute(entity), None)
+    def all_entities(self):
+        return [entity for entity in [self.modifier, self.fire, self.bomb, self.entity] if entity is not None]
+
+    def destructible_entities(self):
+        return [entity for entity in self.all_entities() if isinstance(entity, entities.Destroyable)]
+
+    def has_active_fire(self):
+        return self.fire is not None and self.fire.is_burning and not self.fire.is_destroyed
 
     def has_active_modifier(self):
         return self.modifier is not None and not self.modifier.is_destroyed
 
-    def has_active_fire(self):
-        return self.fire is not None and self.fire.is_burning and not self.fire.is_destroyed
+    def has_collision(self):
+        return self.bomb is not None or isinstance(self.entity, entities.Collideable)
 
     def has_indestructible_entities(self):
         for entity in self.all_entities():
@@ -214,11 +217,8 @@ class BoardSpace:
                 return True
         return False
 
-    def destructible_entities(self):
-        return [entity for entity in self.all_entities() if isinstance(entity, entities.Destroyable)]
-
-    def all_entities(self):
-        return [entity for entity in [self.modifier, self.fire, self.bomb, self.entity] if entity is not None]
+    def remove(self, entity):
+        setattr(self, self._entity_to_attribute(entity), None)
 
     @staticmethod
     def _entity_to_attribute(entity):
@@ -229,4 +229,3 @@ class BoardSpace:
         elif isinstance(entity, entities.Fire):
             return "fire"
         return "entity"
-

@@ -16,6 +16,8 @@ class Entity(object):
 
         self.is_destroyed = False
 
+    def destroy(self):
+        self.is_destroyed = True
 
 class Modifiable(Entity):
     def __init__(self, **kwargs):
@@ -133,12 +135,18 @@ class Detonatable(Entity):
         self.owner = owner
         self.bomb_duration = bomb_duration
 
+    def detonate_set(self):
+        self.is_detonating = True
+
+    def detonate_reset(self):
+        self.is_detonating = False
+
     def detonate_update(self):
         curr_time = time.time()
         duration = curr_time - self.last_update
         self.bomb_duration -= duration
         if self.bomb_duration <= 0:
-            self.is_detonating = False
+            self.detonate_reset()
 
 
 class Burnable(Entity):
@@ -147,12 +155,18 @@ class Burnable(Entity):
         self.is_burning = False
         self.fire_duration = fire_duration
 
+    def burn_set(self):
+        self.is_burning = True
+
+    def burn_reset(self):
+        self.is_burning = False
+
     def burn_update(self):
         curr_time = time.time()
         duration = curr_time - self.last_update
         self.fire_duration -= duration
         if self.fire_duration <= 0:
-            self.is_burning = False
+            self.burn_reset()
 
 
 class Destroyable(Entity):
