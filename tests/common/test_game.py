@@ -80,7 +80,7 @@ class TestGameSuite:
         old_location = player_entity.logical_location
         movement_direction = entities.MovementDirection.RIGHT
         num_spaces = 1
-        new_location = empty_game._get_move_location(player_entity, movement_direction)
+        new_location = empty_game._board.get_relative_location(player_entity.logical_location, movement_direction)
 
         assert player_entity.is_moving is False
         assert player_entity.logical_location == old_location
@@ -204,7 +204,7 @@ class TestGameSuite:
     def test_process_move_into_modifier(self, empty_game, player_entity):
         distance = 1
         movement_direction = entities.MovementDirection.RIGHT
-        modifier_location = empty_game._get_move_location(player_entity, movement_direction)
+        modifier_location = empty_game._board.get_relative_location(player_entity.logical_location, movement_direction)
         modifier = entities.BombModifier(modifier_location)
         modifier_attribute = "bombs"
         movement_duration = distance/player_entity.movement_speed
@@ -222,7 +222,7 @@ class TestGameSuite:
     def test_process_move_into_fire(self, empty_game, player_entity):
         distance = 1
         movement_direction = entities.MovementDirection.RIGHT
-        fire_location = empty_game._get_move_location(player_entity, movement_direction)
+        fire_location = empty_game._board.get_relative_location(player_entity.logical_location, movement_direction)
         fire = entities.Fire(fire_location)
         fire.is_burning = True
         movement_duration = distance / player_entity.movement_speed
@@ -243,7 +243,7 @@ class TestGameSuite:
         player_entity = entities.Player(
             location=old_location
         )
-        new_location = empty_game._get_move_location(player_entity, movement_direction)
+        new_location = empty_game._board.get_relative_location(player_entity.logical_location, movement_direction)
         movement_duration = distance / player_entity.movement_speed
 
         empty_game.add(player_entity)

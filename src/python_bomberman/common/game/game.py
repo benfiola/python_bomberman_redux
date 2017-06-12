@@ -98,41 +98,15 @@ class Game:
         return self._entities.all_entities()
 
     def move(self, entity, direction, num_spaces):
-        new_location = self._get_move_location(entity, direction)
-        self._set_move_state(entity, utils.Coordinate(*new_location), direction, num_spaces)
-
-    def _get_move_location(self, entity, direction, distance=1):
-        location = [
-            *entity.logical_location
-        ]
-        if direction == entities.MovementDirection.UP:
-            location[1] -= distance
-        elif direction == entities.MovementDirection.DOWN:
-            location[1] += distance
-        elif direction == entities.MovementDirection.LEFT:
-            location[0] -= distance
-        elif direction == entities.MovementDirection.RIGHT:
-            location[0] += distance
-        for index, (loc, dim) in enumerate(zip(location, self._board.dimensions())):
-            if loc < 0:
-                location[index] += dim
-            if loc >= dim:
-                location[index] -= dim
-        return utils.Coordinate(*location)
-
-    def _set_move_state(self, entity, location, direction, num_spaces):
-        space = self._board.get(location)
+        new_location = self._board.get_relative_location(entity.logical_location, direction)
+        space = self._board.get(new_location)
         if isinstance(entity, entities.Movable):
             if not space.has_collision():
                 self._board.remove(entity)
-                entity.movement_direction = direction
-                entity.movement_spaces = num_spaces
-                entity.logical_location = location
-                entity.is_moving = True
+                entity.move_set(new_location, direction, num_spaces)
                 self._board.add(entity)
             else:
-                entity.movement_direction = None
-                entity.movement_spaces = None
+                entity.move_reset()
 
     def drop_bomb(self, entity):
         if isinstance(entity, entities.Player) and not entity.is_moving and entity.bombs:
@@ -160,20 +134,31 @@ class Board:
     def get(self, location):
         return self._board[location.x][location.y]
 
+    def get_relative_location(self, location, direction, distance=1):
+        new_location = [
+            *location
+        ]
+        if direction == entities.MovementDirection.UP:
+            new_location[1] -= distance
+        elif direction == entities.MovementDirection.DOWN:
+            new_location[1] += distance
+        elif direction == entities.MovementDirection.LEFT:
+            new_location[0] -= distance
+        elif direction == entities.MovementDirection.RIGHT:
+            new_location[0] += distance
+        for index, (loc, dim) in enumerate(zip(new_location, self.dimensions())):
+            if loc < 0:
+                new_location[index] += dim
+            if loc >= dim:
+                new_location[index] -= dim
+        return utils.Coordinate(*new_location)
+
     def blast_radius(self, location, radius):
         to_return = [location]
 
-        # TODO: replace these with generators.
-        direction_lambdas = [
-            lambda loc, mod: utils.Coordinate(loc.x + mod, loc.y),
-            lambda loc, mod: utils.Coordinate(loc.x - mod, loc.y),
-            lambda loc, mod: utils.Coordinate(loc.x, loc.y + mod),
-            lambda loc, mod: utils.Coordinate(loc.x, loc.y - mod)
-        ]
-
-        for direction in direction_lambdas:
-            for modifier in range(1, radius):
-                potential_location = direction(location, modifier)
+        for direction in entities.MovementDirection.all_directions():
+            for distance in range(1, radius):
+                potential_location = self.get_relative_location(location, direction, distance)
                 space = self.get(potential_location)
                 if space.has_indestructible_entities():
                     break

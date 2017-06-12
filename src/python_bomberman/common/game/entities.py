@@ -33,6 +33,15 @@ class MovementDirection(object):
     UP = 2
     RIGHT = 3
 
+    @classmethod
+    def all_directions(cls):
+        return [
+            MovementDirection.LEFT,
+            MovementDirection.DOWN,
+            MovementDirection.UP,
+            MovementDirection.RIGHT
+        ]
+
 
 class Movable(Entity):
     def __init__(self, movement_speed, **kwargs):
@@ -99,12 +108,21 @@ class Movable(Entity):
         # logical location, reset movement state flags, and apply modifiers
         # that might be at the spot we've just arrived at.
         if done_moving:
-            self.is_moving = False
             self.physical_location = self.logical_location
             self.movement_spaces -= 1
-            if self.movement_spaces <= 0:
-                self.movement_spaces = None
-                self.movement_direction = None
+            self.move_reset(clear_spaces_and_direction=(self.movement_spaces == 0))
+
+    def move_set(self, location, movement_direction, movement_spaces):
+        self.is_moving = True
+        self.logical_location = location
+        self.movement_spaces = movement_spaces
+        self.movement_direction = movement_direction
+
+    def move_reset(self, clear_spaces_and_direction=True):
+        self.is_moving = False
+        if clear_spaces_and_direction:
+            self.movement_spaces = None
+            self.movement_direction = None
 
 
 class Detonatable(Entity):
