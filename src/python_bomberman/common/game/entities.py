@@ -27,58 +27,71 @@ class Collideable(Entity):
         super().__init__(**kwargs)
 
 
+class MovementDirection(object):
+    LEFT = 0
+    DOWN = 1
+    UP = 2
+    RIGHT = 3
+
+
 class Movable(Entity):
     def __init__(self, movement_speed, **kwargs):
         super().__init__(**kwargs)
         self.is_moving = False
+        self.movement_direction = None
         self.movement_speed = movement_speed
 
-    def _new_movement_location(self, duration):
+    def _new_movement_location(self, duration, board_dimensions):
         """
         Calculates the new movement location using self.logical_location as the target
         and self.physical_location as the current location
         :param duration: Duration of time since last update in seconds
         :return: a Coordinate object representing the new location of the entity.
         """
-        list_vec = []
-        for index, (l_loc, p_loc) in enumerate(zip(self.logical_location, self.physical_location)):
-            # We tend to move in a single direction making this pretty easy.
-            # If our current location and target location are the same, we're not moving
-            # in that direction, so set this component's value to 0.
-            if l_loc == p_loc:
-                distance = 0
-            else:
-                # Otherwise, we take the product of self.movement_speed and duration,
-                # negating it if we're intending to move in the other direction.
-                distance = (self.movement_speed * duration)
-                if l_loc - p_loc < 0:
-                    distance = -list_vec[index]
-            # At this point we have a movement vector reflecting the number of units
-            # we want to move in a given direction for each component, so we just
-            # add this number to our physical location to get our next location.
-            new_coordinate = p_loc + distance
-            list_vec.append(new_coordinate)
-        return Coordinate(*list_vec)
+        coords = [
+            *self.physical_location
+        ]
+        distances = [0, 0]
 
-    def move_update(self):
+        if self.movement_direction in [MovementDirection.LEFT, MovementDirection.RIGHT]:
+            distances[0] = self.movement_speed * duration
+            if self.movement_direction == MovementDirection.LEFT:
+                distances[0] = -distances[0]
+        if self.movement_direction in [MovementDirection.UP, MovementDirection.DOWN]:
+            distances[1] = self.movement_speed * duration
+            if self.movement_direction == MovementDirection.UP:
+                distances[1] = -distances[1]
+
+        for index, (coord, dist, dimension) in enumerate(zip(coords, distances, board_dimensions)):
+            coords[index] = coord + dist
+
+            # if we're heading off the board, let's use this opportunity
+            # to teleport ourselves onto the other side of the board, moving
+            # to our target location.
+            if coords[index] < -0.5:
+                coords[index] += dimension
+            elif coords[index] > (dimension - .5):
+                coords[index] -= dimension
+
+        return Coordinate(*coords)
+
+    def move_update(self, board_dimensions):
         """
-                Moves an entity towards its logical location.
-                :return: None
-                """
+        Moves an entity towards its logical location.
+        :return: None
+        """
         done_moving = True
         curr_time = time.time()
 
-        new_location = self._new_movement_location(curr_time - self.last_update)
+        new_location = self._new_movement_location(curr_time - self.last_update, board_dimensions)
 
-        # This block will evaluate if our new_location has reached or surpassed our target.
-        # For both components, if we've reached or surpassed our target, then we're done moving.
-        for (l_loc, n_loc, p_loc) in zip(self.logical_location, new_location, self.physical_location):
-            p_distance = l_loc - p_loc
-            n_distance = l_loc - n_loc
-            done_moving = done_moving and (
-                p_distance <= 0 <= n_distance or
-                n_distance <= 0 <= p_distance
-            )
+        # Evaluate if we're done moving by looking at movement direction and our new physical location
+        done_moving = (
+            (self.movement_direction == MovementDirection.LEFT and new_location[0] <= self.logical_location[0] <= self.physical_location[0]) or
+            (self.movement_direction == MovementDirection.RIGHT and self.physical_location[0] <= self.logical_location[0] <= new_location[0]) or
+            (self.movement_direction == MovementDirection.UP and new_location[1] <= self.logical_location[1] <= self.physical_location[1]) or
+            (self.movement_direction == MovementDirection.DOWN and self.physical_location[1] <= self.logical_location[1] <= new_location[1])
+        )
 
         # Naively update our physical location.
         self.physical_location = new_location

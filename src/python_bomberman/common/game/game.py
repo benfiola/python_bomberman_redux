@@ -47,7 +47,7 @@ class Game:
             if not entity.is_destroyed:
                 # handle movement processing
                 if isinstance(entity, entities.Movable) and entity.is_moving:
-                    entity.move_update()
+                    entity.move_update(self._board.dimensions())
                     # if the entity is not longer moving, it's finished.
                     if not entity.is_moving:
                         space = self._board.get(entity.logical_location)
@@ -95,10 +95,11 @@ class Game:
     def all_entities(self):
         return self._entities.all_entities()
 
-    def move(self, entity, location):
+    def move(self, entity, location, direction):
         space = self._board.get(location)
         if isinstance(entity, entities.Movable) and not space.has_collision():
             self._board.remove(entity)
+            entity.movement_direction = direction
             entity.logical_location = location
             entity.is_moving = True
             self._board.add(entity)
@@ -116,6 +117,9 @@ class Board:
         self._board = [[BoardSpace() for _ in range(0, height)] for _ in range(0, width)]
         self.width = width
         self.height = height
+
+    def dimensions(self):
+        return utils.Coordinate(self.width, self.height)
 
     def add(self, entity):
         self._board[entity.logical_location.x][entity.logical_location.y].add(entity)
