@@ -101,18 +101,18 @@ class Game:
         new_location = self._get_move_location(entity, direction)
         self._set_move_state(entity, utils.Coordinate(*new_location), direction, num_spaces)
 
-    def _get_move_location(self, entity, direction, num_spaces=1):
+    def _get_move_location(self, entity, direction, distance=1):
         location = [
             *entity.logical_location
         ]
         if direction == entities.MovementDirection.UP:
-            location[1] -= num_spaces
+            location[1] -= distance
         elif direction == entities.MovementDirection.DOWN:
-            location[1] += num_spaces
+            location[1] += distance
         elif direction == entities.MovementDirection.LEFT:
-            location[0] -= num_spaces
+            location[0] -= distance
         elif direction == entities.MovementDirection.RIGHT:
-            location[0] += num_spaces
+            location[0] += distance
         for index, (loc, dim) in enumerate(zip(location, self._board.dimensions())):
             if loc < 0:
                 location[index] += dim
