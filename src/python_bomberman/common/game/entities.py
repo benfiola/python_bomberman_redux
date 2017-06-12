@@ -66,8 +66,7 @@ class Movable(Entity):
             coords[index] = coord + dist
 
             # if we're heading off the board, let's use this opportunity
-            # to teleport ourselves onto the other side of the board, moving
-            # to our target location.
+            # to teleport ourselves onto the other side of the board
             if coords[index] < -0.5:
                 coords[index] += dimension
             elif coords[index] > (dimension - .5):
@@ -85,7 +84,7 @@ class Movable(Entity):
 
         new_location = self._new_movement_location(curr_time - self.last_update, board_dimensions)
 
-        # Evaluate if we're done moving by looking at movement direction and our new physical location
+        # Evaluate if we're done moving by looking at movement direction, our new location and our old location.
         done_moving = (
             (self.movement_direction == MovementDirection.LEFT and new_location[0] <= self.logical_location[0] <= self.physical_location[0]) or
             (self.movement_direction == MovementDirection.RIGHT and self.physical_location[0] <= self.logical_location[0] <= new_location[0]) or
