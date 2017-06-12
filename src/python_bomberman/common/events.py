@@ -15,7 +15,7 @@ class EventDispatcher(object):
         if event_name not in self.events:
             raise EventDispatcherException.event_doesnt_exist(event_name)
         handler_id = id(handler)
-        if handler_id not  in self.events[event_name]:
+        if handler_id not in self.events[event_name]:
             self.events[event_name][handler_id] = []
         self.events[event_name][handler_id].push(handlers)
 
