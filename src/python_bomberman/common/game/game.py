@@ -33,22 +33,24 @@ class Game:
     def drop_bomb(self, entity):
         if not entity.can_drop_bombs:
             raise GameException.entity_incapable_of_performing_action(entity, "drop bomb")
-        if not entity.destroyed and not entity.moving and entity.bombs:
-            # TODO: drop a bomb
+        if not entity.destroyed and not entity.moving and entity.bombs and not self._board.get(entity.logical_location).has_bomb():
+            # TODO: drop a bomb and manage its detonation using a TimedTask
             pass
 
     def move(self, entity, direction, num_spaces):
         if not entity.can_move:
             raise GameException.entity_incapable_of_performing_action(entity, "move")
         if not entity.destroyed:
-            # TODO: move entity using TimedTask
+            # TODO: move entity using TimedTask (but how do we interrupt previous move tasks for this entity)
             pass
 
     def process(self):
+        # process the tasks that are active
         for task in list(self._tasks):
             task.run()
             if task.done:
                 self._tasks.remove(task)
+        # remove any destroyed entities
         for entity in [entity for entity in self._entities.all_entities() if entity.destroyed]:
             self.remove(entity)
 
@@ -100,8 +102,8 @@ class MovementTask(TimedTask):
         self.entity = entity
 
     def needs_removal(self):
-        if self.entity.is_destroyed:
-            
+        pass
+
     def process(self):
         pass
 
@@ -111,7 +113,7 @@ class MovementTask(TimedTask):
 
 class DetonationTask(TimedTask):
     def __init__(self, game, entity):
-        super().__init__()
+        super().__init__(game)
         self.game = game
         self.entity = entity
 
@@ -123,8 +125,8 @@ class DetonationTask(TimedTask):
 
 
 class BurningTask(TimedTask):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, game):
+        super().__init__(game)
         pass
 
     def process(self):

@@ -36,3 +36,6 @@ class BoardSpace:
 
     def occupied(self, entity):
         return getattr(self, self._entity_to_attribute(entity), None) is not None
+
+    def has_bomb(self):
+        return self.bomb is not None
