@@ -4,11 +4,10 @@ import json
 
 @logger.create()
 class Map(object):
-    def __init__(self, width, height, name=None, objects=None):
+    def __init__(self, dimensions, name=None, objects=None):
         self.name = name
-        self.width = width
-        self.height = height
-        self._objects = [[None for _ in range(0, height)] for _ in range(0, width)]
+        self.dimensions = dimensions
+        self._objects = [[None for _ in range(0, dimensions.y)] for _ in range(0, dimensions.x)]
 
         if objects:
             for obj in objects:
@@ -30,8 +29,7 @@ class Map(object):
         to_write = {
             "metadata": {
                 "name": self.name,
-                "width": self.width,
-                "height": self.height
+                "dimensions": self.dimensions
             },
             "objects": [
                 {
@@ -59,8 +57,9 @@ class Map(object):
                 location=Coordinate(*obj["location"])
             ) for obj in data["objects"] if obj["identifier"] in obj_classes
         ]
-
+        dimensions = Coordinate(**data["metadata"].pop("dimensions"))
         return cls(
+            dimensions,
             **data["metadata"],
             objects=objs
         )
@@ -69,8 +68,7 @@ class Map(object):
         try:
             return (
                 self.name == other.name and
-                self.height == other.height and
-                self.width == other.width and
+                self.dimensions == other.dimensions and
                 self.all_objects() == other.all_objects()
             )
         except AttributeError:
@@ -78,6 +76,8 @@ class Map(object):
 
 
 class MapObject(object):
+    identifier = None
+
     def __init__(self, location):
         self.location = location
 

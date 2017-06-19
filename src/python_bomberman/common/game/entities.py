@@ -1,280 +1,117 @@
+import uuid
 import time
-from uuid import uuid4
-from python_bomberman.common.utils import Coordinate
-
+from python_bomberman.common.game.exceptions import GameException
 
 class Entity(object):
-    def __init__(self, location, **kwargs):
-        unique_id = kwargs.pop("unique_id", None)
-        if unique_id is None:
-            unique_id = uuid4()
-
-        self.logical_location = location
-        self.physical_location = location
+    def __init__(
+            self,
+            location,
+            unique_id=uuid.uuid4(),
+            can_move=False,             # is this entity capable of moving
+            can_destroy=False,          # is this entity capable of being destroyed by other entities
+            can_collide=False,          # is this entity capable of being collided with
+            can_burn=False,             # is this entity capable of burning
+            can_modify=False,           # is this entity capable of modifying other entities
+            can_drop_bombs=False,       # is this entity capable of dropping bombs
+            can_be_modified=False,      # is this entity capable of being modified by modifiers
+            can_detonate=False          # is this entity capable of blowing up
+    ):
         self.unique_id = unique_id
-        self.last_update = time.time()
-
-        self.is_destroyed = False
-
-    def destroy(self):
-        self.is_destroyed = True
-
-class Modifiable(Entity):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-
-class Collideable(Entity):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-
-class MovementDirection(object):
-    LEFT = 0
-    DOWN = 1
-    UP = 2
-    RIGHT = 3
-
-    @classmethod
-    def all_directions(cls):
-        return [
-            MovementDirection.LEFT,
-            MovementDirection.DOWN,
-            MovementDirection.UP,
-            MovementDirection.RIGHT
-        ]
-
-
-class Movable(Entity):
-    def __init__(self, movement_speed, **kwargs):
-        super().__init__(**kwargs)
-        self.is_moving = False
-        self.movement_spaces = None
-        self.movement_direction = None
-        self.movement_speed = movement_speed
-
-    def _new_movement_location(self, duration, board_dimensions):
-        """
-        Calculates the new movement location using self.logical_location as the target
-        and self.physical_location as the current location
-        :param duration: Duration of time since last update in seconds
-        :return: a Coordinate object representing the new location of the entity.
-        """
-        coordinates = [
-            *self.physical_location
-        ]
-        distances = [0, 0]
-
-        if self.movement_direction in [MovementDirection.LEFT, MovementDirection.RIGHT]:
-            distances[0] = self.movement_speed * duration
-            if self.movement_direction == MovementDirection.LEFT:
-                distances[0] = -distances[0]
-        if self.movement_direction in [MovementDirection.UP, MovementDirection.DOWN]:
-            distances[1] = self.movement_speed * duration
-            if self.movement_direction == MovementDirection.UP:
-                distances[1] = -distances[1]
-
-        for index, (coordinate, distance, dimension) in enumerate(zip(coordinates, distances, board_dimensions)):
-            coordinates[index] = coordinate + distance
-
-            # if we're heading off the board, let's use this opportunity
-            # to teleport ourselves onto the other side of the board
-            if coordinates[index] < -0.5:
-                coordinates[index] += dimension
-            elif coordinates[index] > (dimension - .5):
-                coordinates[index] -= dimension
-
-        return Coordinate(*coordinates)
-
-    def move_update(self, board_dimensions):
-        """
-        Moves an entity towards its logical location.
-        :return: None
-        """
-        curr_time = time.time()
-
-        new_location = self._new_movement_location(curr_time - self.last_update, board_dimensions)
-
-        # Evaluate if we're done moving by looking at movement direction, our new location and our old location.
-        done_moving = (
-            (self.movement_direction == MovementDirection.LEFT and new_location[0] <= self.logical_location[0] <= self.physical_location[0]) or
-            (self.movement_direction == MovementDirection.RIGHT and self.physical_location[0] <= self.logical_location[0] <= new_location[0]) or
-            (self.movement_direction == MovementDirection.UP and new_location[1] <= self.logical_location[1] <= self.physical_location[1]) or
-            (self.movement_direction == MovementDirection.DOWN and self.physical_location[1] <= self.logical_location[1] <= new_location[1])
-        )
-
-        # Naively update our physical location.
-        self.physical_location = new_location
-
-        # If we're done moving, ensure our physical location matches our
-        # logical location, reset movement state flags, and apply modifiers
-        # that might be at the spot we've just arrived at.
-        if done_moving:
-            self.physical_location = self.logical_location
-            self.movement_spaces -= 1
-            self.move_reset(clear_spaces_and_direction=(self.movement_spaces == 0))
-
-    def move_set(self, location, movement_direction, movement_spaces):
-        self.is_moving = True
+        self.physical_location = location
         self.logical_location = location
-        self.movement_spaces = movement_spaces
-        self.movement_direction = movement_direction
 
-    def move_reset(self, clear_spaces_and_direction=True):
-        self.is_moving = False
-        if clear_spaces_and_direction:
-            self.movement_spaces = None
-            self.movement_direction = None
+        # some attributes for communicating state
+        self.destroyed = False
+        self.moving = False
+        self.detonating = False
+        self.burning = False
 
-
-class Detonatable(Entity):
-    def __init__(self, bomb_duration, fire_distance, owner=None, **kwargs):
-        super().__init__(**kwargs)
-        self.is_detonating = False
-        self.fire_distance = fire_distance
-        self.owner = owner
-        self.bomb_duration = bomb_duration
-
-    def detonate_set(self):
-        self.is_detonating = True
-
-    def detonate_reset(self):
-        self.is_detonating = False
-
-    def detonate_update(self):
-        curr_time = time.time()
-        duration = curr_time - self.last_update
-        self.bomb_duration -= duration
-        if self.bomb_duration <= 0:
-            self.detonate_reset()
+        # some attributes for communicating what entities can or can't do.
+        self.can_move = can_move
+        self.can_drop_bombs = can_drop_bombs
+        self.can_destroy = can_destroy
+        self.can_collide = can_collide
+        self.can_burn = can_burn
+        self.can_modify = can_modify
+        self.can_be_modified = can_be_modified
+        self.can_detonate = can_detonate
 
 
-class Burnable(Entity):
-    def __init__(self, fire_duration, **kwargs):
-        super().__init__(**kwargs)
-        self.is_burning = False
-        self.fire_duration = fire_duration
-
-    def burn_set(self):
-        self.is_burning = True
-
-    def burn_reset(self):
-        self.is_burning = False
-
-    def burn_update(self):
-        curr_time = time.time()
-        duration = curr_time - self.last_update
-        self.fire_duration -= duration
-        if self.fire_duration <= 0:
-            self.burn_reset()
-
-
-class Destroyable(Entity):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-
-class Player(Movable, Destroyable, Collideable, Modifiable):
-    identifier = "player"
-
-    def __init__(self, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id,
-            movement_speed=1
-        )
-
-        self.bombs = 1
-        self.fire_distance = 3
-        self.bomb_duration = 3
-
-
-class Fire(Burnable, Destroyable):
-    identifier = "fire"
-
-    def __init__(self, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id,
-            fire_duration=2
-        )
-
-
-class Bomb(Detonatable, Destroyable, Collideable):
-    identifier = "bomb"
-
-    def __init__(self, owner, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id,
-            owner=owner,
-            fire_distance=owner.fire_distance,
-            bomb_duration=owner.bomb_duration,
-        )
-
-
-class DestructibleWall(Collideable, Destroyable):
-    identifier = "destructible_wall"
-
-    def __init__(self, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id
-        )
-
-
-class IndestructibleWall(Collideable):
+class IndestructibleWall(Entity):
     identifier = "indestructible_wall"
 
-    def __init__(self, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id
-        )
+    def __init__(self, location):
+        super().__init__(location, can_collide=True)
 
 
-class Modifier(Destroyable):
-    def __init__(self, amount, **kwargs):
+class DestructibleWall(Entity):
+    identifier = "destructible_wall"
+
+    def __init__(self, location):
+        super().__init__(location, can_collide=True, can_destroy=True)
+
+
+class Player(Entity):
+    identifier = "player"
+
+    def __init__(self, location):
+        super().__init__(location, can_move=True, can_collide=True, can_destroy=True, can_be_modified=True, can_drop_bombs=True)
+        self.movement_speed = 1
+        self.bombs = 1
+        self.bomb_radius = 3
+
+
+class Bomb(Entity):
+    identifier = "bomb"
+
+    def __init__(self, location, duration, radius):
+        super().__init__(location, can_move=True, can_detonate=True, can_collide=True)
+        self.movement_speed = 1
+        self.duration = duration
+        self.radius = radius
+
+
+class Fire(Entity):
+    identifier = "fire"
+
+    def __init__(self, location):
+        super().__init__(location, can_destroy=True, can_burn=True)
+
+
+class Modifier(Entity):
+    def __init__(self, location, amount):
+        super().__init__(location, can_destroy=True, can_modify=True)
         self.amount = amount
-        super().__init__(
-            **kwargs
-        )
 
     def modify(self, entity):
-        pass
-
-
-class MovementModifier(Modifier):
-    def __init__(self, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id,
-            amount=.1
-        )
-
-    def modify(self, entity):
-        entity.movement_speed += self.amount
+        raise GameException.method_unimplemented(self.__class__, "modify")
 
 
 class BombModifier(Modifier):
-    def __init__(self, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id,
-            amount=1
-        )
+    identifier = "bomb_modifier"
+
+    def __init__(self, location, amount=1):
+        super().__init__(location, amount)
 
     def modify(self, entity):
         entity.bombs += self.amount
 
 
-class FireModifier(Modifier):
-    def __init__(self, location, unique_id=None):
-        super().__init__(
-            location=location,
-            unique_id=unique_id,
-            amount=1
-        )
+class BombRadiusModifier(Modifier):
+    identifier = "bomb_radius_modifier"
+
+    def __init__(self, location, amount=1):
+        super().__init__(location, amount)
 
     def modify(self, entity):
-        entity.fire_distance += self.amount
+        entity.bomb_radius += self.amount
+
+
+class MovementSpeedModifier(Modifier):
+    identifier = "movement_speed_modifier"
+
+    def __init__(self, location, amount=.1):
+        super().__init__(location, amount)
+
+    def modify(self, entity):
+        entity.movement_speed += self.amount
