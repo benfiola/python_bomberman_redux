@@ -64,7 +64,7 @@ class Player(Entity):
 class Bomb(Entity):
     identifier = "bomb"
 
-    def __init__(self, location, duration, radius):
+    def __init__(self, location, radius, duration=2):
         super().__init__(location, can_move=True, can_detonate=True, can_collide=True)
         self.movement_speed = 1
         self.duration = duration
@@ -74,8 +74,9 @@ class Bomb(Entity):
 class Fire(Entity):
     identifier = "fire"
 
-    def __init__(self, location):
+    def __init__(self, location, duration=2):
         super().__init__(location, can_destroy=True, can_burn=True)
+        self.duration = duration
 
 
 class Modifier(Entity):

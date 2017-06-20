@@ -37,5 +37,18 @@ class BoardSpace:
     def occupied(self, entity):
         return getattr(self, self._entity_to_attribute(entity), None) is not None
 
+    def has_modifier(self):
+        return self.modifier is not None and not self.modifier.destroyed
+
+    def has_fire(self):
+        return self.fire is not None and not self.fire.destroyed
+
     def has_bomb(self):
-        return self.bomb is not None
+        return self.bomb is not None and not self.bomb.destroyed
+
+    def has_indestructible_entity(self):
+        return self.entity is not None and not self.entity.can_be_destroyed
+
+    def destroy_all(self):
+        for entity in [entity for entity in self.all_entities() if entity.can_be_destroyed]:
+            entity.destroyed = True

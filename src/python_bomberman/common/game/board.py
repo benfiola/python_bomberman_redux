@@ -1,5 +1,7 @@
 from python_bomberman.common.game.board_space import BoardSpace
 from python_bomberman.common.game.movement_direction import MovementDirection
+import python_bomberman.common.utils as utils
+
 
 class Board:
     def __init__(self, dimensions):
@@ -19,9 +21,19 @@ class Board:
         return [entity for row in self._board for space in row for entity in space.all_entities()]
 
     def blast_radius(self, location, radius):
-        return []
+        to_return = [location]
 
-    def get_coordinate(self, location, direction, distance=1):
+        for direction in MovementDirection.all_directions():
+            for distance in range(1, radius):
+                loc = self.relative_location(location, direction, distance)
+                if self.get(loc).has_indestructible_entity():
+                    break
+                to_return.append(loc)
+
+        return to_return
+
+
+    def relative_location(self, location, direction, distance=1):
         new_location = [
             *location
         ]
