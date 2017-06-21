@@ -13,6 +13,9 @@ class EntityMap:
     def all_entities(self):
         return self._entities.values()
 
+    def destroyed_entities(self):
+        return [entity for entity in self.all_entities() if entity.destroyed]
+
     def get(self, unique_id):
         return self._entities[unique_id] if unique_id in self._entities else None
 

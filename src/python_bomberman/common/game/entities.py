@@ -1,6 +1,6 @@
 import uuid
-import time
 from python_bomberman.common.game.exceptions import GameException
+
 
 class Entity(object):
     def __init__(
@@ -55,7 +55,9 @@ class Player(Entity):
     identifier = "player"
 
     def __init__(self, location):
-        super().__init__(location, can_move=True, can_collide=True, can_destroy=True, can_be_modified=True, can_drop_bombs=True)
+        super().__init__(
+            location, can_move=True, can_collide=True, can_destroy=True, can_be_modified=True, can_drop_bombs=True
+        )
         self.movement_speed = 1
         self.bombs = 1
         self.bomb_radius = 3

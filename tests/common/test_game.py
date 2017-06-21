@@ -53,7 +53,7 @@ class TestGameSuite:
     # entities from the map to the game at init time.
     def test_init(self, populated_map):
         new_game = game.Game(populated_map)
-        entity = new_game._board.get(utils.Coordinate(1, 1))
+        entity = new_game.board.get(utils.Coordinate(1, 1))
         assert entity is not None
         assert len(new_game.all_entities()) == 1
 

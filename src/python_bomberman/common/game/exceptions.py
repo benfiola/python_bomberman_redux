@@ -26,3 +26,7 @@ class GameException(Exception):
     def entity_incapable_of_performing_action(cls, entity, action):
         return cls("Entity {} at location incapable of performing action: {}".format(entity.__class__.__name__, entity.logical_location, action))
 
+    @classmethod
+    def incomplete_args(cls, class_obj, method, args):
+        return cls("Call to {}.{} has incomplete args: {}".format(class_obj.__name__, method, args))
+

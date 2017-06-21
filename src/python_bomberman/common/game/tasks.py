@@ -1,12 +1,58 @@
 import time
-from python_bomberman.common.game.movement_direction import MovementDirection
+from python_bomberman.common.game.constants import MovementDirection
 import python_bomberman.common.utils as utils
 import python_bomberman.common.game.entities as entities
+
+
+class TaskManager(object):
+    def __init__(self, game):
+        self.game = game
+        self._tasks = {}
+
+    def _register_task(self, task):
+        entity = task.entity
+
+        # removes a task of the same class that might exist already for this entity
+        # (only one of each task for any entity at any given time)
+        self._tasks[entity.unique_id] = filter(
+            lambda val: val.__class__ != task.__class__,
+            self._tasks.get(entity.unique_id, [])
+        )
+
+        self._tasks[entity.unique_id].append(task)
+
+    def unregister_task(self, task):
+        entity = task.entity
+
+        # remove the task being unregistered
+        self._tasks[entity.unique_id] = filter(
+            lambda val: val != task,
+            self._tasks.get(entity.unique_id, [])
+        )
+
+        # remove the key if it has no active tasks
+        if not self._tasks[entity.unique_id]:
+            self._tasks.pop(entity.unique_id)
+
+    def register_movement_task(self, entity, direction, distance):
+        self._register_task(MovementTask(self.game, entity, direction, distance))
+
+    def register_detonation_task(self, entity, bomb_owner):
+        self._register_task(DetonationTask(self.game, entity, bomb_owner))
+
+    def register_burning_task(self, entity):
+        self._register_task(BurningTask(self.game, entity))
+
+    def run(self):
+        for task in self._tasks.values():
+            task.run()
 
 
 class TimedTask(object):
     def __init__(self, game, entity):
         self.game = game
+        self.board = game.board
+        self.task_manager = game.task_manager
         self.entity = entity
         self.last_update = None
         self.started = False
@@ -17,7 +63,7 @@ class TimedTask(object):
         self.last_update = time.time()
 
     def _on_finish(self):
-        self.game.unregister_task(self)
+        self.task_manager.unregister_task(self)
 
     def run(self):
         if self.needs_removal():
@@ -39,7 +85,7 @@ class TimedTask(object):
     def needs_removal(self):
         # if we prematurely need to remove the task because the entities involved in the task
         # should no longer exist, then we leverage this hook to prematurely kill the task
-        return False
+        return self.entity.destroyed
 
     def process(self):
         # this is the method that runs until it decides it's finished by setting the
@@ -57,14 +103,11 @@ class MovementTask(TimedTask):
         self.direction = direction
         self.distance = distance
 
-    def needs_removal(self):
-        return self.entity.destroyed
-
     def on_start(self):
-        new_location = self.game._board.relative_location(self.entity.logical_location, self.direction, 1)
-        if not self.game._board.get(new_location).occupied(self.entity):
+        space = self.board.get(self.entity.logical_location, self.direction, 1)
+        if not space.occupied(self.entity):
             self.entity.moving = True
-            self.entity.logical_location = new_location
+            self.entity.logical_location = space.location
         else:
             self.done = True
 
@@ -82,52 +125,49 @@ class MovementTask(TimedTask):
         self.entity.moving = False
         self.entity.physical_location = self.entity.logical_location
 
-        space = self.game._board.get(self.entity.logical_location)
+        space = self.board.get(self.entity.logical_location)
+
         if self.entity.can_be_modified and space.has_modifier():
             space.modifier.modify(self.entity)
             space.modifier.destroyed = True
         if self.entity.can_be_destroyed and space.has_fire():
             self.entity.destroyed = True
 
-        if not self.entity.destroyed and self.distance > 0:
-            self.game.register_task(self.entity, self.direction, self.distance - 1)
+        if self.distance > 0:
+            self.task_manager.register_movement_task(self.entity, self.direction, self.distance - 1)
+
+    def _new_physical_location(self, duration):
+        # add distance traveled to each coordinate
+        new_loc = [coord + dist for coord, dist in zip(self.entity.physical_location, self._distance_moved(duration))]
+
+        # no trendy shorthand for this bad boy - if we're going
+        # off the edge of the board, move it to the other side.
+        for index, (coord, dimension) in enumerate(zip(new_loc, self.board.dimensions)):
+            if coord < -0.5:
+                new_loc[index] += dimension
+            elif coord > (dimension - .5):
+                new_loc[index] -= dimension
+
+        return utils.Coordinate(*new_loc)
+
+    def _distance_moved(self, duration):
+        distance = self.entity.movement_speed * duration
+        distance_map = {
+            MovementDirection.LEFT: utils.Coordinate(-distance, 0.0),
+            MovementDirection.RIGHT: utils.Coordinate(distance, 0.0),
+            MovementDirection.UP: utils.Coordinate(0.0, -distance),
+            MovementDirection.DOWN: utils.Coordinate(0.0, distance)
+        }
+        return distance_map.get(self.direction, utils.Coordinate(0.0, 0.0))
 
     def _done_moving(self, old_loc, new_loc, target):
         finished_map = {
-            MovementDirection.LEFT: new_loc[0] <= target[0] <= old_loc[0],
-            MovementDirection.RIGHT: old_loc[0] <= target[0] <= new_loc[0],
-            MovementDirection.UP: new_loc[1] <= target[1] <= old_loc[1],
-            MovementDirection.DOWN: old_loc[1] <= target[1] <= new_loc[1]
+            MovementDirection.LEFT: new_loc.x <= target.x <= old_loc.x,
+            MovementDirection.RIGHT: old_loc.x <= target.x <= new_loc.x,
+            MovementDirection.UP: new_loc.y <= target.y <= old_loc.y,
+            MovementDirection.DOWN: old_loc.y <= target.y <= new_loc.y
         }
         return finished_map.get(self.direction, True)
-
-    def _new_physical_location(self, duration):
-        entity = self.entity
-
-        # get starting point
-        coordinates = [
-            *entity.physical_location
-        ]
-
-        # get distance moved
-        distance = entity.movement_speed * duration
-        distance_map = {
-            MovementDirection.LEFT: [-distance, 0],
-            MovementDirection.RIGHT: [distance, 0],
-            MovementDirection.UP: [0, -distance],
-            MovementDirection.DOWN: [0, distance]
-        }
-        distances = distance_map.get(self.direction, [0, 0])
-
-        # calculate new coordinate, moving entity past end of table onto other side if needed.
-        for index, (coordinate, distance, dimension) in enumerate(zip(coordinates, distances, self.game._board.dimensions)):
-            coordinates[index] = coordinate + distance
-            if coordinates[index] < -0.5:
-                coordinates[index] += dimension
-            elif coordinates[index] > (dimension - .5):
-                coordinates[index] -= dimension
-
-        return utils.Coordinate(*coordinates)
 
 
 class DetonationTask(TimedTask):
@@ -145,12 +185,13 @@ class DetonationTask(TimedTask):
     def on_finish(self):
         self.entity.detonating = False
         self.entity.destroyed = True
-        if not self.bomb_owner.destroyed:
-            self.bomb_owner.bombs += 1
-        for location in self.game._board.blast_radius(self.entity.logical_location, self.entity.radius):
-            fire = self.game.add(entities.Fire(location))
-            self.game.register_task(BurningTask(self.game, fire))
-            self.game._board.get(location).destroy_all()
+
+        self.bomb_owner.bombs += 1
+
+        for space in self.board.blast_radius(self.entity.logical_location, self.entity.radius):
+            fire = self.game.add(entities.Fire(space.location))
+            self.task_manager.register_burning_task(fire)
+            space.destroy_all()
 
 
 class BurningTask(TimedTask):
@@ -159,9 +200,6 @@ class BurningTask(TimedTask):
 
     def on_start(self):
         self.entity.burning = True
-
-    def needs_removal(self):
-        return self.entity.destroyed
 
     def process(self):
         self.entity.duration -= (time.time() - self.last_update)

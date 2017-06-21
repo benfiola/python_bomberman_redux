@@ -1,15 +1,15 @@
 from python_bomberman.common.game.board import Board
 from python_bomberman.common.game.entity_map import EntityMap
 from python_bomberman.common.game.exceptions import GameException
-from python_bomberman.common.game.tasks import MovementTask, DetonationTask
+from python_bomberman.common.game.tasks import TaskManager
 import python_bomberman.common.game.entities as entities
 
 
 class Game:
     def __init__(self, game_map):
-        self._board = Board(dimensions=game_map.dimensions)
-        self._entities = EntityMap()
-        self._tasks = {}
+        self.board = Board(dimensions=game_map.dimensions)
+        self.entities = EntityMap()
+        self.tasks = TaskManager(self)
 
         map_obj_cls = {}
         to_check = entities.Entity.__subclasses__()
@@ -22,37 +22,11 @@ class Game:
             if map_obj.identifier in map_obj_cls:
                 self.add(map_obj_cls[map_obj.identifier](location=map_obj.location))
 
-    def register_task(self, task):
-        entity = task.entity
-
-        # removes a task of the same class that might exist already for this entity
-        # (only one of each task for any entity at any given time)
-        self._tasks[entity.unique_id] = filter(
-            lambda val: val.__class__ != task.__class__,
-            self._tasks.get(entity.unique_id, [])
-        )
-
-        self._tasks[entity.unique_id].append(task)
-
-    def unregister_task(self, task):
-        entity = task.entity
-
-        # remove the task being unregistered
-        self._tasks[entity.unique_id] = filter(
-            lambda val: val != task,
-            self._tasks.get(entity.unique_id, [])
-        )
-
-        # remove the key if it has no active tasks
-        if not self._tasks[entity.unique_id]:
-            self._tasks.pop(entity.unique_id)
-
     def add(self, entity):
-        self._board.add(entity)
-        self._entities.add(entity)
+        self.board.add(entity)
+        self.entities.add(entity)
 
-        loc = entity.logical_location
-        space = self._board.get(loc)
+        space = self.board.get(entity.logical_location)
 
         if space.has_fire() and entity.can_be_destroyed:
             entity.destroyed = True
@@ -61,12 +35,14 @@ class Game:
             space.modifier.destroyed = True
 
     def remove(self, entity):
-        self._board.remove(entity)
-        self._entities.remove(entity)
+        self.board.remove(entity)
+        self.entities.remove(entity)
 
     def drop_bomb(self, entity):
         if not entity.can_drop_bombs:
             raise GameException.entity_incapable_of_performing_action(entity, "drop bomb")
+
+        space = self.board.get(entity.logical_location)
 
         if entity.destroyed:
             return
@@ -74,7 +50,7 @@ class Game:
             return
         if not entity.bombs:
             return
-        if self._board.get(entity.logical_location).has_bomb():
+        if space.has_bomb():
             return
 
         bomb = entities.Bomb(
@@ -82,20 +58,19 @@ class Game:
             radius=entity.bomb_radius
         )
         entity.bombs -= 1
-        self.register_task(DetonationTask(self, bomb, entity))
+        self.tasks.register_detonation_task(bomb, entity)
 
     def move(self, entity, direction, num_spaces):
         if not entity.can_move:
             raise GameException.entity_incapable_of_performing_action(entity, "move")
         if entity.destroyed:
             return
-        self.register_task(MovementTask(self, entity, direction, num_spaces))
+        self.tasks.register_movement_task(entity, direction, num_spaces)
 
     def process(self):
         # process the tasks that are active
-        for task in self._tasks.values():
-            task.run()
+        self.tasks.run()
 
         # remove any destroyed entities
-        for entity in [entity for entity in self._entities.all_entities() if entity.destroyed]:
+        for entity in self.entities.destroyed_entities():
             self.remove(entity)
