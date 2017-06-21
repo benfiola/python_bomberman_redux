@@ -3,6 +3,10 @@ class GameException(Exception):
         super().__init__(*args)
 
     @classmethod
+    def location_invalid(cls, location):
+        return cls("Location {} is invalid.".format(location))
+
+    @classmethod
     def entity_at_location_exists(cls, entity):
         return cls("Entity already exists at location {}.".format(entity.logical_location))
 

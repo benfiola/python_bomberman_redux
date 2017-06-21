@@ -23,6 +23,3 @@ class EntityMap:
         if entity.unique_id not in self._entities:
             raise GameException.entity_with_id_doesnt_exist(entity)
         self._entities.pop(entity.unique_id) if entity.unique_id in self._entities else None
-
-    def occupied(self, unique_id):
-        return self._entities.get(unique_id, None) is not None

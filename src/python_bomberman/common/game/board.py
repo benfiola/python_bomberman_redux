@@ -14,10 +14,10 @@ class Board:
         ]
 
     def add(self, entity):
-        self._board[entity.logical_location.x][entity.logical_location.y].add(entity)
+        self.get(entity.logical_location).add(entity)
 
     def remove(self, entity):
-        self._board[entity.logical_location.x][entity.logical_location.y].remove(entity)
+        self.get(entity.logical_location).remove(entity)
 
     def get(self, location, direction=None, distance=None):
         if distance and direction:
@@ -28,6 +28,11 @@ class Board:
                 MovementDirection.RIGHT: [location[0] + distance, location[1]]
             }
             new_location = direction_map.get(direction, [*location])
+            for index, (loc, dim) in enumerate(zip(new_location, self.dimensions)):
+                if loc < 0:
+                    new_location[index] += dim
+                if loc >= dim:
+                    new_location[index] -= dim
         elif not distance and not direction:
             new_location = [*location]
         else:
@@ -40,12 +45,11 @@ class Board:
                 }
             )
 
-        for index, (loc, dim) in enumerate(zip(new_location, self.dimensions)):
-            if loc < 0:
-                new_location[index] += dim
-            if loc >= dim:
-                new_location[index] -= dim
-        return self.get(utils.Coordinate(*new_location))
+        new_location = utils.Coordinate(*new_location)
+        if not 0 <= new_location.x < self.dimensions.x or not 0 <= new_location.y < self.dimensions.y:
+            raise GameException.location_invalid(new_location)
+
+        return self.get(new_location)
 
     def all_entities(self):
         return [entity for row in self._board for space in row for entity in space.all_entities()]
