@@ -6,7 +6,7 @@ class Entity(object):
     def __init__(
             self,
             location,
-            unique_id=uuid.uuid4(),
+            unique_id=None,
             can_move=False,             # is this entity capable of moving
             can_destroy=False,          # is this entity capable of being destroyed by other entities
             can_collide=False,          # is this entity capable of being collided with
@@ -16,6 +16,8 @@ class Entity(object):
             can_be_modified=False,      # is this entity capable of being modified by modifiers
             can_detonate=False          # is this entity capable of blowing up
     ):
+        if unique_id is None:
+            unique_id = uuid.uuid4()
         self.unique_id = unique_id
         self.physical_location = location
         self.logical_location = location
