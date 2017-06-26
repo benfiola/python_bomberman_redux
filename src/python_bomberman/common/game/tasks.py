@@ -127,10 +127,10 @@ class MovementTask(TimedTask):
 
         space = self.board.get(self.entity.logical_location)
 
-        if self.entity.can_be_modified and space.has_modifier():
+        if self.entity.can_be_modifier and space.has_modifier():
             space.modifier.modify(self.entity)
             space.modifier.destroyed = True
-        if self.entity.can_be_destroyed and space.has_fire():
+        if self.entity.can_destroy and space.has_fire():
             self.entity.destroyed = True
 
         if self.distance > 0:

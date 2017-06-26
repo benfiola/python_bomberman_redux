@@ -11,6 +11,10 @@ class GameException(Exception):
         return cls("Entity already exists at location {}.".format(entity.logical_location))
 
     @classmethod
+    def entity_to_remove_doesnt_match(cls, expected, actual):
+        return cls("Entity {} to be removed doesn't match entity {}".format(expected, actual))
+
+    @classmethod
     def entity_at_location_doesnt_exist(cls, entity):
         return cls("Entity doesn't exist at location {}.".format(entity.logical_location))
 

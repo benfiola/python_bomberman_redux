@@ -57,7 +57,7 @@ class Map(object):
                 location=Coordinate(*obj["location"])
             ) for obj in data["objects"] if obj["identifier"] in obj_classes
         ]
-        dimensions = Coordinate(**data["metadata"].pop("dimensions"))
+        dimensions = Coordinate(*data["metadata"].pop("dimensions"))
         return cls(
             dimensions,
             **data["metadata"],

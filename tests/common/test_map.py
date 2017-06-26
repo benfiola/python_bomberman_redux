@@ -7,8 +7,12 @@ import os
 
 class TestSuite:
     @pytest.fixture
-    def empty_map(self):
-        return map.Map(4, 5, name="test")
+    def dimensions(self):
+        return utils.Coordinate(4, 5)
+
+    @pytest.fixture
+    def empty_map(self, dimensions):
+        return map.Map(dimensions, name="test")
 
     @pytest.fixture
     def populated_map(self, empty_map):
@@ -27,8 +31,7 @@ class TestSuite:
         class Bogus:
             def __init__(self):
                 self.name = populated_map.name + " nope"
-                self.height = populated_map.height - 1
-                self.width = populated_map.width - 1
+                self.dimensions = utils.Coordinate(populated_map.dimensions.x - 1, populated_map.dimensions.y - 1)
                 self.objects = lambda: populated_map[:1]
         return Bogus()
 
@@ -50,8 +53,7 @@ class TestSuite:
         class Bogus:
             def __init__(self):
                 self.name = populated_map.name
-                self.width = populated_map.width
-                self.height = populated_map.height
+                self.dimensions = populated_map.dimensions
                 self._objects = populated_map.all_objects()
 
             def objects(self):
@@ -70,8 +72,7 @@ class TestSuite:
 
     def test_init(self, empty_map):
         assert empty_map.name == "test"
-        assert empty_map.width == 4
-        assert empty_map.height == 5
+        assert empty_map.dimensions
 
     def test_add_get_object(self, empty_map, player):
         assert len(empty_map.all_objects()) == 0
