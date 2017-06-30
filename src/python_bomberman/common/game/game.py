@@ -23,9 +23,6 @@ class Game:
                 self.add(map_obj_cls[map_obj.identifier](location=map_obj.location))
 
     def add(self, entity):
-        self.board.add(entity)
-        self.entities.add(entity)
-
         space = self.board.get(entity.logical_location)
 
         if space.has_fire() and entity.can_destroy:
@@ -33,6 +30,10 @@ class Game:
         if space.has_modifier() and entity.can_be_modified:
             space.modifier.modify(entity)
             space.modifier.destroyed = True
+            
+        self.board.add(entity)
+        self.entities.add(entity)
+
         return entity
 
     def remove(self, entity):
