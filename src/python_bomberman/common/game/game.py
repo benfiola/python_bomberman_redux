@@ -28,15 +28,17 @@ class Game:
 
         space = self.board.get(entity.logical_location)
 
-        if space.has_fire() and entity.can_be_destroyed:
+        if space.has_fire() and entity.can_destroy:
             entity.destroyed = True
         if space.has_modifier() and entity.can_be_modified:
             space.modifier.modify(entity)
             space.modifier.destroyed = True
+        return entity
 
     def remove(self, entity):
         self.board.remove(entity)
         self.entities.remove(entity)
+        return entity
 
     def drop_bomb(self, entity):
         if not entity.can_drop_bombs:

@@ -14,10 +14,10 @@ class TaskManager(object):
 
         # removes a task of the same class that might exist already for this entity
         # (only one of each task for any entity at any given time)
-        self._tasks[entity.unique_id] = filter(
+        self._tasks[entity.unique_id] = list(filter(
             lambda val: val.__class__ != task.__class__,
             self._tasks.get(entity.unique_id, [])
-        )
+        ))
 
         self._tasks[entity.unique_id].append(task)
 
@@ -25,23 +25,29 @@ class TaskManager(object):
         entity = task.entity
 
         # remove the task being unregistered
-        self._tasks[entity.unique_id] = filter(
+        self._tasks[entity.unique_id] = list(filter(
             lambda val: val != task,
             self._tasks.get(entity.unique_id, [])
-        )
+        ))
 
         # remove the key if it has no active tasks
         if not self._tasks[entity.unique_id]:
             self._tasks.pop(entity.unique_id)
 
     def register_movement_task(self, entity, direction, distance):
-        self._register_task(MovementTask(self.game, entity, direction, distance))
+        to_return = MovementTask(self.game, entity, direction, distance)
+        self._register_task(to_return)
+        return to_return
 
     def register_detonation_task(self, entity, bomb_owner):
-        self._register_task(DetonationTask(self.game, entity, bomb_owner))
+        to_return = DetonationTask(self.game, entity, bomb_owner)
+        self._register_task(to_return)
+        return to_return
 
     def register_burning_task(self, entity):
-        self._register_task(BurningTask(self.game, entity))
+        to_return = BurningTask(self.game, entity)
+        self._register_task(to_return)
+        return to_return
 
     def run(self):
         for task in self._tasks.values():
@@ -52,7 +58,7 @@ class TimedTask(object):
     def __init__(self, game, entity):
         self.game = game
         self.board = game.board
-        self.task_manager = game.task_manager
+        self.task_manager = game.tasks
         self.entity = entity
         self.last_update = None
         self.started = False
@@ -74,9 +80,9 @@ class TimedTask(object):
         if not self.done:
             self.process()
             self.last_update = time.time()
-        else:
-            self._on_finish()
-            self.on_finish()
+            if self.done:
+                self._on_finish()
+                self.on_finish()
 
     def on_start(self):
         # use this hook to do any setup prior to starting the timed task.
@@ -127,13 +133,13 @@ class MovementTask(TimedTask):
 
         space = self.board.get(self.entity.logical_location)
 
-        if self.entity.can_be_modifier and space.has_modifier():
+        if self.entity.can_be_modified and space.has_modifier():
             space.modifier.modify(self.entity)
             space.modifier.destroyed = True
         if self.entity.can_destroy and space.has_fire():
             self.entity.destroyed = True
 
-        if self.distance > 0:
+        if self.distance > 1:
             self.task_manager.register_movement_task(self.entity, self.direction, self.distance - 1)
 
     def _new_physical_location(self, duration):
@@ -189,9 +195,9 @@ class DetonationTask(TimedTask):
         self.bomb_owner.bombs += 1
 
         for space in self.board.blast_radius(self.entity.logical_location, self.entity.radius):
+            space.destroy_all()
             fire = self.game.add(entities.Fire(space.location))
             self.task_manager.register_burning_task(fire)
-            space.destroy_all()
 
 
 class BurningTask(TimedTask):
